@@ -48,6 +48,7 @@ export default defineConfig({
 				"fa6-regular": ["*"],
 				"fa6-solid": ["*"],
 			},
+			iconDir: "src/assets/icons",
 		}),
 		svelte(),
 		sitemap(),
