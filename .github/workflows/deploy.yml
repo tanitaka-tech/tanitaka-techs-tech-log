@@ -3,6 +3,8 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [ develop ]
+  schedule:
+    - cron: "0 21 * * *" # 毎日 6:00 JST にZennの記事一覧を更新
   workflow_dispatch:
 
 permissions:

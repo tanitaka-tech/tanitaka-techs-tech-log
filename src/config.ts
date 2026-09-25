@@ -4,6 +4,7 @@ import type {
 	NavBarConfig,
 	ProfileConfig,
 	SiteConfig,
+	ZennConfig,
 } from "./types/config";
 import { LinkPreset } from "./types/config";
 
@@ -78,4 +79,10 @@ export const commentConfig: CommentConfig = {
 		category: "Announcements",
 		categoryId: "DIC_kwDORRblEc4DGXh5",
 	},
+};
+
+export const zennConfig: ZennConfig = {
+	enable: true,
+	username: "tanitaka_tech",
+	count: 5,
 };

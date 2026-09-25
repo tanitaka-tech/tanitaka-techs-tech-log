@@ -1,0 +1,34 @@
+---
+import { zennConfig } from "../../config";
+import I18nKey from "../../i18n/i18nKey";
+import { i18n } from "../../i18n/translation";
+import { formatDateToYYYYMMDD } from "../../utils/date-utils";
+import { getZennArticles } from "../../utils/zenn-utils";
+import WidgetLayout from "./WidgetLayout.astro";
+
+interface Props {
+	class?: string;
+	style?: string;
+}
+const className = Astro.props.class;
+const style = Astro.props.style;
+
+const articles = (await getZennArticles()).slice(0, zennConfig.count);
+---
+{articles.length > 0 && (
+<WidgetLayout name={i18n(I18nKey.zennArticles)} id="zenn-articles" isCollapsed={false} class={className} style={style}>
+    <div class="flex flex-col gap-1">
+        {articles.map((a) => (
+            <a href={a.url} target="_blank" rel="noopener noreferrer"
+               class="btn-plain !block rounded-lg px-2 py-1.5 text-left">
+                <div class="text-black/75 dark:text-white/75 text-sm font-medium line-clamp-2 transition">{a.title}</div>
+                <div class="text-black/30 dark:text-white/30 text-xs transition">{formatDateToYYYYMMDD(a.published)}</div>
+            </a>
+        ))}
+        <a href={`https://zenn.dev/${zennConfig.username}`} target="_blank" rel="noopener noreferrer"
+           class="btn-plain !block rounded-lg px-2 py-1.5 text-sm text-[var(--primary)] font-medium">
+            {i18n(I18nKey.more)} →
+        </a>
+    </div>
+</WidgetLayout>
+)}
