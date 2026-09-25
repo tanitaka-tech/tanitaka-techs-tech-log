@@ -652,50 +652,12 @@ document.addEventListener(
 	{ passive: true, capture: true },
 )
 
-// カテゴリの見出しの開閉ボタンのアイコン
-const DIGEST_CHEVRON =
-	'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>'
-
-/**
- * カテゴリの見出しに件数と開閉ボタンを付ける。見出しのどこを押しても開閉できる（# のリンクは除く）。
- * initiallyOpen が false なら閉じた状態で表示する（記事末尾のニュースなど）
- */
-function setupDigestHeading(
-	heading: HTMLElement,
-	body: HTMLElement,
-	count: number,
-	{ open: initiallyOpen = true, collapsible = true } = {},
-) {
-	const section = heading.parentElement
-	const title = heading.firstChild?.textContent?.trim() ?? ""
+/** カテゴリの見出しに件数を付ける */
+function setupDigestHeading(heading: HTMLElement, count: number) {
 	const countLabel = document.createElement("span")
 	countLabel.className = "digest-count"
 	countLabel.textContent = `${count}件`
 	heading.insertBefore(countLabel, heading.querySelector("a.anchor"))
-	// 閉じられないカテゴリ（音楽・MV など。再生中に閉じて止まらないように）は開閉ボタンを付けない
-	if (!collapsible) {
-		heading.classList.add("digest-fixed")
-		return
-	}
-	const toggle = document.createElement("button")
-	toggle.type = "button"
-	toggle.className = "digest-toggle"
-	toggle.setAttribute("aria-controls", body.id)
-	toggle.innerHTML = DIGEST_CHEVRON
-	heading.append(toggle)
-	const setOpen = (open: boolean) => {
-		toggle.setAttribute("aria-expanded", String(open))
-		toggle.setAttribute("aria-label", `${title}を${open ? "閉じる" : "開く"}`)
-		section?.classList.toggle("digest-collapsed", !open)
-		// 閉じている間は中の要素にフォーカスが移らないようにし、再生中の動画も止める
-		body.inert = !open
-		if (!open) for (const { frame, pause } of mediaPlayers) if (body.contains(frame)) pause()
-	}
-	setOpen(initiallyOpen)
-	heading.addEventListener("click", (e) => {
-		if (e.target instanceof Element && e.target.closest("a")) return
-		setOpen(toggle.getAttribute("aria-expanded") !== "true")
-	})
 }
 
 let digestBodyCount = 0
@@ -870,7 +832,7 @@ function setupDigestLists() {
 		const entries = [...panel.children] as HTMLElement[]
 		if (entries.length === 0) continue
 
-		// カードの下半分。見出しとの区切り線と一覧を入れ、見出しから開閉できるようにする
+		// カードの下半分。見出しとの区切り線と一覧を入れる
 		const body = document.createElement("div")
 		body.className = "digest-body"
 		body.id = `digest-body-${++digestBodyCount}`
@@ -886,10 +848,7 @@ function setupDigestLists() {
 		content.append(divider)
 		const heading = panel.closest("section")?.querySelector<HTMLElement>(":scope > h2")
 		if (heading) {
-			setupDigestHeading(heading, body, entries.length, {
-				open: panel.dataset.collapsed !== "true",
-				collapsible: panel.dataset.fixed !== "true",
-			})
+			setupDigestHeading(heading, entries.length)
 		}
 		const hasMedia = entries.some(isMediaEntry)
 		if (entries.length < 2) {
@@ -1137,7 +1096,8 @@ function setupDigestLists() {
 				const current = entries[active]
 				entries.splice(0, entries.length, ...order)
 				tabs.splice(0, tabs.length, ...order.map((e) => tabByEntry.get(e) as HTMLButtonElement))
-				panel.append(...entries)
+				// 項目は重ねて表示しているので、DOM の順は変えなくてよい。動かすと中の iframe（プレーヤー・埋め込み）が
+				// 読み込み直され、再生が止まったり目次の再生ボタン・再生バーと食い違ったりするので、目次だけを並べ替える
 				tabs[0]?.parentElement?.append(...tabs)
 				active = entries.indexOf(current)
 				markSelected()

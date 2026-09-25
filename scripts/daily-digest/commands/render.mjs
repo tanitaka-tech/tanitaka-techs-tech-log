@@ -95,16 +95,14 @@ export function render(ctx, { force = false, final = false } = {}) {
         ...warnings,
         ...overLimit,
         ...items.filter((i) => i.note).map((i) => `#${numbers[i.key]}: ${i.note}`),
-        ...(raw.news ?? []).filter((n) => n.note).map((n) => `ニュース「${n.title}」: ${n.note}`),
       ]
   const article = renderArticle({
     date,
-    selection: { topic, topicKey, description: raw.description ?? "", items, news: raw.news ?? [] },
+    selection: { topic, topicKey, description: raw.description ?? "", items },
     review: reviewWarnings,
     categoryLimit,
     // プレビューで並べ替えた記事は、selection.json の順のまま載せる
     keepOrder: raw.ordered === true,
-    fixedCategories: config.article.fixedCategories ?? [],
     candidatesByKey: new Map([...available].map(([k, e]) => [k, e.c])),
     category: config.article.category,
     fixedTags: config.article.tags ?? [],
@@ -116,7 +114,6 @@ export function render(ctx, { force = false, final = false } = {}) {
 
   console.log(`${articlePath} を書き出しました${final ? "（公開用）" : "（プレビュー用。警告を記事に表示しています）"}: ${topic} ${date}`)
   for (const [label, n] of perCategory) console.log(`  ${label}: ${n}件`)
-  if (raw.news?.length) console.log(`  ニュース: ${raw.news.length}件`)
   for (const i of items.filter((i) => i.note)) console.log(`  ⚠️ #${numbers[i.key]} ${i.note}`)
   for (const w of [...warnings, ...overLimit]) console.log(`  ⚠️ ${w}`)
   console.log(`\nプレビュー（pnpm dev）: http://localhost:4321/tanitaka-techs-tech-log/posts/daily-digest/${date}/`)
