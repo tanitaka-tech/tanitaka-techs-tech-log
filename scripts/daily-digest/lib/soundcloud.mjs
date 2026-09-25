@@ -1,107 +1,60 @@
 /*
- * X で共有された SoundCloud の曲を集める。並べ方は x-youtube と同じく「何人が X で貼ったか」。
+ * SoundCloud の曲を、SoundCloud の検索から直接集める。
  *
- * SoundCloud の公式 API はアプリ登録に審査が要るので使わず、曲ページに埋め込まれている
- * window.__sc_hydration（ページ描画用の JSON）から公開日・再生数などを読む。
- * 非公式なので、ページの作りが変わったら parseHydration を直す。
+ * 公式 API はアプリ登録に審査が要るので、soundcloud.com 自身が使っている api-v2 を使う。
+ * client_id はトップページに埋め込まれている window.__sc_hydration（apiClient）から読む。
+ * どちらも非公式なので、ページや API の作りが変わったらここを直す。
+ *
+ * ランキングの API はないので、タグ・キーワードで直近の曲を検索し、いいね数などの伸び率で並べる。
+ * 日本の SoundCloud は24時間では再生が集まらないので、対象は直近7日（maxTrackAgeDays）の曲にしている
+ * （掲載済みの曲は review で自動的に外れる）。
  */
 import { hoursBetween } from "./date.mjs"
-import { aggregateShares, attachSharers, postUrls, readSharePosts } from "./x-youtube.mjs"
+import { velocity } from "./score.mjs"
 import { KANA_RE } from "./youtube.mjs"
 
 const HOST = "https://soundcloud.com"
+const API = "https://api-v2.soundcloud.com"
 // ブラウザ以外の User-Agent だとページの中身が変わることがあるので、ブラウザを名乗る
 const HEADERS = { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko)" }
 
-// soundcloud.com/<1つ目> が曲の投稿者ではないページ
-const RESERVED_USERS = new Set([
-  "discover", "search", "stream", "you", "charts", "pages", "upload", "settings", "messages",
-  "notifications", "people", "tags", "stations", "jobs", "imprint", "terms-of-use", "mobile", "apps", "popular",
-])
-// soundcloud.com/<投稿者>/<2つ目> が曲ではないページ
-const RESERVED_TRACKS = new Set([
-  "sets", "likes", "tracks", "reposts", "albums", "popular-tracks", "followers", "following", "comments", "spotlight",
-])
-
-/**
- * SoundCloud の URL から曲の permalink（"<投稿者>/<曲>"、小文字）を取り出す。
- * プレイリスト・プロフィール・限定公開（/s-xxxx）の URL などは null
- */
-export function soundcloudPermalink(url) {
-  let u
-  try {
-    u = new URL(url)
-  } catch {
-    return null
-  }
-  if (u.hostname.replace(/^(www|m)\./, "") !== "soundcloud.com") return null
-  const parts = u.pathname.split("/").filter(Boolean)
-  if (parts.length !== 2) return null
-  const [user, track] = parts.map((p) => p.toLowerCase())
-  if (RESERVED_USERS.has(user) || RESERVED_TRACKS.has(track)) return null
-  return `${user}/${track}`
-}
-
-const isShortLink = (url) => {
-  try {
-    return new URL(url).hostname === "on.soundcloud.com"
-  } catch {
-    return false
-  }
-}
-
-/** on.soundcloud.com の短縮 URL をリダイレクト先に解決する。解決できなければ Map に入れない */
-async function resolveShortLinks(urls) {
-  const resolved = new Map()
-  for (const url of new Set(urls.filter(isShortLink))) {
-    try {
-      const res = await fetch(url, { headers: HEADERS })
-      await res.body?.cancel()
-      if (res.ok) resolved.set(url, res.url)
-    } catch (e) {
-      console.warn(`[soundcloud] 短縮 URL を解決できません: ${url} (${e.message})`)
-    }
-  }
-  return resolved
-}
-
-/** 曲ページの HTML から hydration の曲データ（hydratable: "sound"）を取り出す。見つからなければ null */
+/** ページの HTML から hydration の JSON（配列）を取り出す。見つからなければ null */
 export function parseHydration(html) {
   const m = html.match(/__sc_hydration\s*=\s*(\[[\s\S]*?\]);\s*<\/script>/)
   if (!m) return null
-  let data
   try {
-    data = JSON.parse(m[1])
+    return JSON.parse(m[1])
   } catch {
     return null
   }
-  return data.find((d) => d.hydratable === "sound")?.data ?? null
 }
 
-/** permalink の曲ページを読み、曲データを返す。削除・非公開などで曲データがなければ null */
-export async function fetchTrack(permalink) {
-  const res = await fetch(`${HOST}/${permalink}`, { headers: HEADERS })
-  if (res.status === 404) return null
-  if (!res.ok) throw new Error(`SoundCloud ${res.status} ${permalink}`)
-  // 存在しない曲も 200 で空のページが返るので、曲データの有無で判定する
-  return parseHydration(await res.text())
+let clientId
+/** api-v2 の client_id。トップページの hydration（apiClient）から読み、実行中は使い回す */
+async function getClientId() {
+  if (clientId) return clientId
+  const res = await fetch(HOST, { headers: HEADERS })
+  if (!res.ok) throw new Error(`SoundCloud ${res.status} トップページ`)
+  const id = parseHydration(await res.text())?.find((d) => d.hydratable === "apiClient")?.data?.id
+  if (!id) throw new Error("SoundCloud の client_id が見つかりません（ページの作りが変わった可能性があります）")
+  clientId = id
+  return id
 }
 
-async function fetchTracks(permalinks, concurrency = 4) {
-  const tracks = new Map()
-  const queue = [...permalinks]
-  const worker = async () => {
-    while (queue.length) {
-      const permalink = queue.shift()
-      try {
-        const t = await fetchTrack(permalink)
-        if (t) tracks.set(permalink, t)
-      } catch (e) {
-        console.warn(`[soundcloud] ${e.message}`)
-      }
-    }
+/** api-v2 の曲検索。next_href をたどって pages ページ（1ページ50曲）まで読む */
+async function searchTracks(params, pages) {
+  const id = await getClientId()
+  let url = new URL(`${API}/search/tracks`)
+  for (const [k, v] of Object.entries({ ...params, limit: 50 })) url.searchParams.set(k, v)
+  const tracks = []
+  for (let i = 0; i < pages && url; i++) {
+    url.searchParams.set("client_id", id)
+    const res = await fetch(url, { headers: HEADERS })
+    if (!res.ok) throw new Error(`SoundCloud API ${res.status} /search/tracks`)
+    const body = await res.json()
+    tracks.push(...(body.collection ?? []))
+    url = body.next_href ? new URL(body.next_href) : null
   }
-  await Promise.all(Array.from({ length: concurrency }, worker))
   return tracks
 }
 
@@ -131,6 +84,11 @@ export function artworkUrl(t, size = "t500x500") {
   return url?.replace(/-large\.(\w+)$/, `-${size}.$1`)
 }
 
+/** 反応数。再生は曲を開いただけでも増えるので、いいね・リポストを重く見る */
+export function soundcloudEngagement(t) {
+  return (t.playback_count ?? 0) + (t.likes_count ?? 0) * 10 + (t.reposts_count ?? 0) * 20
+}
+
 /** 説明文は HTML が混ざるので、タグを外して平文にする */
 function plainText(html) {
   return html
@@ -143,7 +101,8 @@ function plainText(html) {
     .replace(/&amp;/g, "&")
 }
 
-export function toSoundcloudCandidate(t, genre) {
+export function toSoundcloudCandidate(t, genre, now = new Date()) {
+  const publishedAt = trackPublishedAt(t)
   return {
     key: `soundcloud:${t.id}`,
     source: "soundcloud",
@@ -160,47 +119,46 @@ export function toSoundcloudCandidate(t, genre) {
       handle: t.user.permalink,
       avatar: t.user.avatar_url,
     },
-    publishedAt: trackPublishedAt(t).toISOString(),
+    publishedAt: publishedAt.toISOString(),
     metrics: {
       plays: t.playback_count ?? 0,
       likes: t.likes_count ?? 0,
       reposts: t.reposts_count ?? 0,
       comments: t.comment_count ?? 0,
+      followers: t.user.followers_count ?? 0,
     },
+    score: velocity(soundcloudEngagement(t), publishedAt, now),
   }
 }
 
-export async function collectXSoundcloudGenre(genre, window, config, xToken, budget, now = new Date(), share = Infinity) {
-  const read = await readSharePosts(genre, window, config, xToken, budget, share)
-  if (!read) return []
-  const { posts, users } = read
-
-  const shortLinks = await resolveShortLinks(posts.flatMap(postUrls))
-  const byTrack = aggregateShares(posts, users, window, (url) => soundcloudPermalink(shortLinks.get(url) ?? url))
-  const minSharers = genre.minSharers ?? 1
-  const permalinks = [...byTrack].filter(([, s]) => s.size >= minSharers).map(([p]) => p)
-  console.log(`[x] ${genre.id}: ${posts.length}件の投稿から曲 ${byTrack.size}曲（${minSharers}人以上の共有: ${permalinks.length}曲）`)
-  if (permalinks.length === 0) return []
+/**
+ * ジャンルの tags（SoundCloud のジャンル・タグ）と queries（キーワード）で直近の曲を検索し、候補にする。
+ * 検索は API キー不要で、X のような従量課金もない
+ */
+export async function searchSoundcloudGenre(genre, now = new Date()) {
+  const pages = genre.pages ?? 2
+  const created = genre.maxTrackAgeDays > 7 ? "last_month" : "last_week"
+  const searches = [
+    ...(genre.tags ?? []).map((tag) => ({ q: "*", "filter.genre_or_tag": tag })),
+    ...(genre.queries ?? []).map((q) => ({ q })),
+  ]
+  const byId = new Map()
+  for (const params of searches) {
+    for (const t of await searchTracks({ ...params, "filter.created_at": created }, pages)) byId.set(t.id, t)
+  }
 
   const maxAgeDays = genre.maxTrackAgeDays ?? 7
-  const requireKana = genre.requireKana ?? false
-  const tracks = await fetchTracks(permalinks)
-  // 同じ曲が別の URL（大文字小文字違いなど）で貼られていても1件にする
-  const byId = new Map()
-  for (const [permalink, t] of tracks) {
-    if (!isPlayable(t)) continue
-    if (requireKana && !trackHasKana(t)) continue
-    if (hoursBetween(trackPublishedAt(t), now) > maxAgeDays * 24) continue
-    if ((t.playback_count ?? 0) < (genre.minPlays ?? 0)) continue
-    const sharers = byTrack.get(permalink)
-    const prev = byId.get(t.id)
-    if (!prev) {
-      byId.set(t.id, { t, sharers: new Map(sharers) })
-      continue
-    }
-    for (const [id, s] of sharers) if (!prev.sharers.has(id)) prev.sharers.set(id, s)
-  }
-  return [...byId.values()].map(({ t, sharers }) => attachSharers(toSoundcloudCandidate(t, genre), sharers))
+  const requireKana = genre.requireKana ?? true
+  const tracks = [...byId.values()].filter(
+    (t) =>
+      isPlayable(t) &&
+      (!requireKana || trackHasKana(t)) &&
+      hoursBetween(trackPublishedAt(t), now) <= maxAgeDays * 24 &&
+      (t.likes_count ?? 0) >= (genre.minLikes ?? 0) &&
+      (t.user?.followers_count ?? 0) >= (genre.minFollowers ?? 0),
+  )
+  console.log(`[soundcloud] ${genre.id}: ${searches.length}回の検索で ${byId.size}曲（条件に合う曲: ${tracks.length}曲）`)
+  return tracks.map((t) => toSoundcloudCandidate(t, genre, now))
 }
 
 /** 削除・非公開になった曲の ID を返す。oEmbed は曲 ID の URL を受け付け、見られない曲には 404 を返す */

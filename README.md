@@ -101,7 +101,7 @@ YouTube を再生数順に検索するだけだと海外の大型コンテンツ
 - **仮名フィルタと検索の分割**: タイトルかチャンネル名に仮名がある動画だけを残し（`youtube.requireKana`）、アニソン・ボカロ・VTuber などを別々に検索して候補を確保する。記事では1つのカルーセルにまとめ、上部の区切り（`step`）で切り替えられる。区切りの中はスコア順
 - **X での共有者数**（`x-music`）: X で YouTube リンクを貼ったアカウントの数（重複なし）で並べる。宣伝や bot のアカウントは `ignore-sharer` で数えないようにできる
 - **X リスト**（`x-list-music`）: 自分で作った公開リストのメンバーが貼った動画を拾う。`config.yaml` の `listId` にリストの ID（`x.com/i/lists/<ID>`）を入れると有効になり、以降はリストのメンバーを編集するだけで好みを調整できる
-- **SoundCloud**（`x-soundcloud`）: X で SoundCloud の曲のリンクを貼ったアカウントの数で並べる（`x-music` と同じ数え方）。曲の公開日・再生数は、公式 API（アプリ登録に審査が要る）ではなく曲ページに埋め込まれたデータ（`__sc_hydration`）から読むので、API キーは要らない。非公式なデータなので、SoundCloud のページの作りが変わったら `scripts/daily-digest/lib/soundcloud.mjs` の `parseHydration` を直す。公開日が `maxTrackAgeDays` より古い曲・埋め込み不可の曲・Go+ 限定の曲は除く
+- **SoundCloud**（`soundcloud`）: SoundCloud の検索から、ボカロ・J-POP・アニメなどのタグとキーワードで直近7日（`maxTrackAgeDays`）の曲を集め、いいね・リポスト・再生の伸び率で並べる。公式 API はアプリ登録に審査が要るので、soundcloud.com 自身が使う api-v2 を、トップページに埋め込まれた client_id（`__sc_hydration`）で呼ぶ（API キー・従量課金なし）。非公式なので、SoundCloud の作りが変わったら `scripts/daily-digest/lib/soundcloud.mjs` を直す。埋め込み不可の曲・Go+ 限定の曲は除く
 
 ### 削除された投稿の確認
 
