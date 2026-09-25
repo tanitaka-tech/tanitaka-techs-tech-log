@@ -8,14 +8,15 @@
  *   curate unset  <対象>            … 対象と同じ条件のルールを消す
  *   curate list                     … ルールの一覧
  *
- * 対象: #3（候補） / author:#3（候補の投稿者） / x:123・youtube:abc・soundcloud:123（キー）
- *       author:x:<ユーザーID>・author:youtube:<チャンネルID> / genre:<ジャンルID> / text:<正規表現>
+ * 対象: #3（候補） / author:#3（候補の投稿者） / youtube:abc・pixiv:123 など（キー。lib/sources.mjs のソース）
+ *       author:youtube:<チャンネルID>・author:bluesky:<DID> など / genre:<ジャンルID> / text:<正規表現>
  */
 import fs from "node:fs"
 import { addRule, authorKey, CURATION_PATH, describeRule, loadCuration, removeRules, saveCuration } from "../lib/curation.mjs"
 import { readJson } from "../lib/context.mjs"
 import { todayJst } from "../lib/date.mjs"
 import { resolveKey } from "../lib/review.mjs"
+import { KEY_RE } from "../lib/sources.mjs"
 
 function candidateByKey(ctx, key) {
   const list = fs.existsSync(ctx.paths.candidates) ? readJson(ctx.paths.candidates) : []
@@ -34,7 +35,7 @@ function parseTarget(ctx, target) {
       if (!c) throw new Error(`${ref}（${key}）の候補データが見つかりません`)
       return { match: { author: authorKey(c) }, label: `${c.author.name}（${authorKey(c)}）` }
     }
-    if (!/^(x|youtube|soundcloud|steam|hatena|bluesky|misskey|pixiv):\S+$/.test(ref)) throw new Error(`author の形式が不正です: ${ref}`)
+    if (!KEY_RE.test(ref)) throw new Error(`author の形式が不正です: ${ref}`)
     return { match: { author: ref }, label: ref }
   }
   if (target.startsWith("genre:")) {
@@ -46,7 +47,7 @@ function parseTarget(ctx, target) {
     return { match: { text: target.slice("text:".length) }, label: `本文 /${target.slice(5)}/` }
   }
   const key = resolveKey(target, numbers)
-  if (!/^(x|youtube|soundcloud|steam|hatena|bluesky|misskey|pixiv):\S+$/.test(key)) throw new Error(`対象の形式が不正です: ${target}`)
+  if (!KEY_RE.test(key)) throw new Error(`対象の形式が不正です: ${target}`)
   const c = candidateByKey(ctx, key)
   return { match: { key }, label: c ? `${c.title || c.text?.slice(0, 30)}（${key}）` : key }
 }

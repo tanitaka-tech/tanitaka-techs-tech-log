@@ -61,6 +61,10 @@ describe("renderArticle", () => {
     assert.doesNotMatch(final, /digest-review|data-adopt|要確認/)
   })
 
+  it("記事末尾の出典には、掲載した項目のソースだけを出す", () => {
+    assert.match(article(), /この記事は、はてなブックマーク・YouTubeの公開データ/)
+  })
+
   it("タイトルなどの HTML を逃がす", () => {
     const cs = [makeCandidate({ id: "v1", title: '<b>"x"</b>' })]
     const md = article({ candidates: cs })
@@ -81,6 +85,8 @@ describe("掲載済みの項目の読み取りと削除", () => {
     const text = fs.readFileSync(file, "utf8")
     assert.doesNotMatch(text, /## 最新技術/)
     assert.match(text, /## 音楽・MV/)
-    assert.deepEqual(listItemsByFile(dir).find((f) => f.file === file).keys, ["youtube:v1", "youtube:m1"])
+    const listed = listItemsByFile(dir).find((f) => f.file === file)
+    assert.deepEqual(listed.keys, ["youtube:v1", "youtube:m1"])
+    assert.equal(listed.urls.get("youtube:v1"), "https://example.com/v1")
   })
 })

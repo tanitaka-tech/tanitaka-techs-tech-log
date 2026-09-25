@@ -1,5 +1,6 @@
 import fs from "node:fs"
 import path from "node:path"
+import { SOURCES, sourceOf } from "./sources.mjs"
 
 const ITEM_RE = /<!-- digest-item (\w+):(\S+) -->[\s\S]*?<!-- \/digest-item -->\n*/g
 const SECTION_RE = /<!-- digest-section -->[\s\S]*?<!-- \/digest-section -->\n*/g
@@ -159,7 +160,7 @@ function tocLabel(c) {
 /** 目次に小さく出す画像。YouTube は軽い 320px 版、SoundCloud は 300px のアートワーク、X は投稿者のアイコン（収集時に取れたときだけ） */
 function tocThumb(c) {
   if (c.source === "youtube") return `https://i.ytimg.com/vi/${c.id}/mqdefault.jpg`
-  if (c.source === "x" || c.source === "bluesky" || c.source === "misskey") return c.author.avatar
+  if (sourceOf(c.source)?.social) return c.author.avatar
   if (c.source === "soundcloud") return soundcloudArtwork(thumbnail(c), "t300x300")
   return thumbnail(c)
 }
@@ -170,6 +171,14 @@ function reviewBanner(warnings, date, topicKey) {
     ? `<ul>${warnings.map((w) => `<li>${escapeText(w)}</li>`).join("")}</ul>`
     : "<p>警告はありません。</p>"
   return `<div class="digest-review-banner" data-date="${escapeAttr(date)}" data-thumb-key="${escapeAttr(topicKey ?? "")}"><p><strong>⚠️ プレビュー用の表示です。</strong>公開する記事（render --final / publish）には出ません。項目ごとの「採用」を切り替えると、selection.json に保存されます（pnpm dev のときだけ）。目次の 🖼 を押すと、その項目の画像を記事のサムネイルにします。</p>${list}</div>\n\n`
+}
+
+/** 記事末尾の出典の説明に出す、掲載した項目のソース名（「はてなブックマーク・YouTube」） */
+function credits(sections) {
+  const used = new Set(sections.flatMap(([, list]) => list.map(({ c }) => c.source)))
+  return SOURCES.filter((s) => used.has(s.id))
+    .map((s) => s.name)
+    .join("・")
 }
 
 /**
@@ -252,7 +261,7 @@ ${noteHtml}${embed(c)}
 ${review ? reviewBanner(review, date, selection.topicKey) : ""}${body}
 ---
 
-この記事は、はてなブックマーク・Bluesky・Misskey・YouTube・SoundCloud・Steam などの公開データをもとに AI が掲載候補を選び、筆者が内容を確認したうえで公開しています。掲載した投稿や動画の権利は各投稿者に帰属します。削除や掲載取りやめのご希望は、ブログのお問い合わせ先までご連絡ください。
+この記事は、${credits(sections)}の公開データをもとに AI が掲載候補を選び、筆者が内容を確認したうえで公開しています。掲載した投稿や動画の権利は各投稿者に帰属します。削除や掲載取りやめのご希望は、ブログのお問い合わせ先までご連絡ください。
 `
 }
 
@@ -267,7 +276,7 @@ export function loadUsedKeys(dir, { exclude = [] } = {}) {
   return used
 }
 
-/** 記事ファイルごとの掲載キー一覧 */
+/** 記事ファイルごとの掲載キー一覧と、キー → 項目の最初のリンク先（はてなの記事など、キーから URL を戻せない項目の確認用） */
 export function listItemsByFile(dir) {
   if (!fs.existsSync(dir)) return []
   return fs
@@ -276,8 +285,10 @@ export function listItemsByFile(dir) {
     .map((f) => {
       const file = path.join(dir, f)
       const text = fs.readFileSync(file, "utf8")
-      const keys = [...text.matchAll(ITEM_RE)].map((m) => `${m[1]}:${m[2]}`)
-      return { file, keys }
+      const blocks = [...text.matchAll(ITEM_RE)]
+      const keys = blocks.map((m) => `${m[1]}:${m[2]}`)
+      const urls = new Map(blocks.map((m) => [`${m[1]}:${m[2]}`, m[0].match(/href="([^"]+)"/)?.[1]?.replace(/&amp;/g, "&")]))
+      return { file, keys, urls }
     })
 }
 
