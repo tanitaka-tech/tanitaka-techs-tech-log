@@ -54,6 +54,9 @@ function formatYield(ctx, entries, stats) {
     const reads = s.reads ? `${s.reads}件読み → ` : ""
     const rate = s.reads ? `（読み取り100件あたり ${((kept / s.reads) * 100).toFixed(1)}件）` : ""
     lines.push(`- ${g.id}: ${reads}候補 ${s.candidates} → ${kept} → 掲載 ${picked}${rate}`)
+    // 収集で外した理由の内訳。多い理由の条件（いいね数・期間など）を見直す
+    const drops = Object.entries(s.drops ?? {}).sort((a, b) => b[1] - a[1])
+    if (drops.length) lines.push(`    収集で除外: ${drops.map(([r, n]) => `${r} ${n}`).join(" / ")}`)
   }
   return lines.join("\n")
 }

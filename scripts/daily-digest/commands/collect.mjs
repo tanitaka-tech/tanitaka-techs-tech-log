@@ -37,23 +37,24 @@ async function fetchAll(ctx) {
   const stats = {}
   for (const genre of config.genres) {
     const before = budget.remaining
+    const drops = {}
     try {
       let found = []
       if (genre.source === "x") {
-        found = await searchXGenre(genre, window, config, requireEnv("X_BEARER_TOKEN"), budget, now, takeShare(genre))
+        found = await searchXGenre(genre, window, config, requireEnv("X_BEARER_TOKEN"), budget, now, takeShare(genre), drops)
       } else if (genre.source === "x-youtube") {
         const keys = { xToken: requireEnv("X_BEARER_TOKEN"), ytKey: requireEnv("YOUTUBE_API_KEY") }
-        found = await collectXYoutubeGenre(genre, window, config, keys, budget, now, takeShare(genre))
+        found = await collectXYoutubeGenre(genre, window, config, keys, budget, now, takeShare(genre), drops)
       } else if (genre.source === "soundcloud") {
-        found = await searchSoundcloudGenre(genre, now)
+        found = await searchSoundcloudGenre(genre, now, drops)
       } else if (genre.source === "youtube") {
-        found = await searchYoutubeGenre(genre, window, config, requireEnv("YOUTUBE_API_KEY"), now)
+        found = await searchYoutubeGenre(genre, window, config, requireEnv("YOUTUBE_API_KEY"), now, drops)
       } else if (genre.source === "steam" && config.steam.enabled) {
         found = await fetchSteamSales(genre, config)
       }
       console.log(`[collect] ${genre.id}: ${found.length}件`)
       candidates.push(...found)
-      stats[genre.id] = { reads: before - budget.remaining, candidates: found.length }
+      stats[genre.id] = { reads: before - budget.remaining, candidates: found.length, drops }
     } catch (e) {
       // 1ジャンルの失敗で全体を止めない
       console.error(`[collect] ${genre.id} 失敗: ${e.message}`)

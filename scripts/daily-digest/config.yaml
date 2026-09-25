@@ -103,8 +103,12 @@ genres:
     maxVideoAgeDays: 7
 
   # ai・illust・landscape はキーワードに当たる投稿が多すぎて、関連度順に50件読んでもいいね数の条件に
-  # ほとんど届かなかった。sampleRetweets でリツイートを新しい順に読み、よくリツイートされている投稿
-  # （人気の投稿）を拾う。exclude は本文・投稿者名に対する正規表現で、当たる投稿は除く
+  # ほとんど届かなかった。sampleRetweets でリツイートを読み、よくリツイートされている投稿（人気の投稿）を拾う。
+  #   sampleSlices:    対象期間をいくつの区間に分けて読むか（既定6。読み取りが足りなければ減らす）
+  #   maxPostAgeHours: リツイート元の投稿を何時間前まで許すか（既定72）
+  #   mediaTypes:      リツイート元の添付メディアの種類（photo / video / animated_gif）を絞る
+  #   excludeVerifiedTypes: 除く認証の種類。business（企業・団体）を除くと、公式アカウントの告知が減る
+  # exclude は本文・投稿者名に対する正規表現で、当たる投稿は除く
   - id: ai
     label: 最新AI技術
     source: x
@@ -130,6 +134,9 @@ genres:
   - id: games
     label: 最新ゲーム
     source: x
+    # ゲームのニュースはリツイートで広まるので、人気の投稿を拾う（関連度順では50件読んで候補2件だった）
+    sampleRetweets: true
+    maxReads: 80
     query: '(新作ゲーム OR 発売日 OR 配信開始 OR 新作発表 OR "Nintendo Direct" OR Steam) (ゲーム OR Switch OR PS5 OR Steam)'
 
   - id: illust
@@ -138,10 +145,12 @@ genres:
     sampleRetweets: true
     xWeight: 2 # リツイートの標本が多いほど人気の投稿が重なって見えるので、読み取りを多めに配分する
     maxReads: 100
-    requireMedia: true # リツイート元に画像・動画がある投稿だけ
+    mediaTypes: [photo, animated_gif] # 画像の投稿だけ（動画は MV・PV が多いので除く）
+    # アニメ・ゲーム・くじなどの公式アカウントの告知が多く上がるので、個人の作品に寄せる
+    excludeVerifiedTypes: [business, government]
     query: "(イラスト OR 絵描きさんと繋がりたい OR 落書き OR オリジナルイラスト OR 創作) -AIイラスト -AIart -nijijourney -キャンペーン -抽選 -プレゼント -グッズ -募集"
     # AI 絵のアカウントは名前に AI を入れていることが多いので、投稿者名も見る
-    exclude: "AIイラスト|AIart|aiart|nijijourney|NovelAI|StableDiffusion|#NSFW|_AI\\b|AI$|キャンペーン|抽選|プレゼント|POP ?UP|グッズ|募集|予約"
+    exclude: "AIイラスト|AIart|aiart|nijijourney|NovelAI|StableDiffusion|#NSFW|_AI\\b|AI$|キャンペーン|抽選|プレゼント|POP ?UP|グッズ|募集|予約|くじ|発売|開催|放送|ご視聴"
     minLikes: 500
 
   - id: landscape
@@ -150,11 +159,13 @@ genres:
     sampleRetweets: true
     xWeight: 2 # リツイートの標本が多いほど人気の投稿が重なって見えるので、読み取りを多めに配分する
     maxReads: 100
-    requireMedia: true
+    mediaTypes: [photo] # 写真だけ
+    # テレビ番組・写真集・アイドルなどの告知が「絶景」「夕焼け」に当たるので、公式アカウントは除く
+    excludeVerifiedTypes: [business, government]
     query: "(風景写真 OR 写真好きな人と繋がりたい OR ファインダー越しの私の世界 OR 絶景 OR 夕焼け OR 星景写真) -AIイラスト -AIart -AI写真 -AI生成 -キャンペーン -抽選 -プレゼント"
     # 「絶景」「夕焼け」はイラスト・舞台の告知・人物の撮影会にも当たるので、それらを除く
     # （写真のハッシュタグだけに絞ると、候補がほとんど残らなかった）
-    exclude: "AIイラスト|AIart|AI写真|AI生成|キャンペーン|抽選|プレゼント|イラスト|Illustration|舞台|公演|撮影会|ポートレート|コスプレ"
+    exclude: "AIイラスト|AIart|AI写真|AI生成|キャンペーン|抽選|プレゼント|イラスト|Illustration|舞台|公演|撮影会|ポートレート|コスプレ|写真集|先行カット|放送|出演|企画"
     minLikes: 300
 
   - id: expression

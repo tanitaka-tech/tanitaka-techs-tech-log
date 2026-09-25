@@ -8,6 +8,7 @@
  *   - listId: X リストのタイムライン（/lists/:id/tweets）。好みのアカウントだけを見る
  */
 import { hoursBetween } from "./date.mjs"
+import { filterWithReasons } from "./drops.mjs"
 import { xGet } from "./x.mjs"
 import { excludeShortsAndStreams, fetchVideos, hasKana, isEmbeddable, toYoutubeCandidate, youtubeVideoId } from "./youtube.mjs"
 
@@ -132,23 +133,28 @@ export function attachSharers(c, sharers) {
   return c
 }
 
-export async function collectXYoutubeGenre(genre, window, config, { xToken, ytKey }, budget, now = new Date(), share = Infinity) {
+export async function collectXYoutubeGenre(genre, window, config, { xToken, ytKey }, budget, now = new Date(), share = Infinity, drops = {}) {
   const read = await readSharePosts(genre, window, config, xToken, budget, share)
   if (!read) return []
   const { posts, users } = read
 
   const byVideo = aggregateShares(posts, users, window, { minFollowers: genre.minFollowers ?? 0 })
   const minSharers = genre.minSharers ?? 1
-  const ids = [...byVideo].filter(([, s]) => s.size >= minSharers).map(([id]) => id)
+  const ids = filterWithReasons([...byVideo], [["共有者不足", ([, s]) => s.size >= minSharers]], drops).map(([id]) => id)
   console.log(`[x] ${genre.id}: ${posts.length}件の投稿から動画 ${byVideo.size}本（${minSharers}人以上の共有: ${ids.length}本）`)
   if (ids.length === 0) return []
 
   const maxAgeDays = genre.maxVideoAgeDays ?? 7
   const requireKana = genre.requireKana ?? config.youtube.requireKana
-  const videos = (await fetchVideos(ids, ytKey))
-    .filter(isEmbeddable)
-    .filter((v) => !requireKana || hasKana(v))
-    .filter((v) => hoursBetween(new Date(v.snippet.publishedAt), now) <= maxAgeDays * 24)
-  return (await excludeShortsAndStreams(videos, config.youtube))
+  const videos = filterWithReasons(
+    await fetchVideos(ids, ytKey),
+    [
+      ["埋め込み不可", isEmbeddable],
+      ["仮名なし", (v) => !requireKana || hasKana(v)],
+      ["古い動画", (v) => hoursBetween(new Date(v.snippet.publishedAt), now) <= maxAgeDays * 24],
+    ],
+    drops,
+  )
+  return (await excludeShortsAndStreams(videos, config.youtube, drops))
     .map((v) => attachSharers(toYoutubeCandidate(v, genre, now), byVideo.get(v.id)))
 }

@@ -10,6 +10,7 @@
  * （掲載済みの曲は review で自動的に外れる）。
  */
 import { hoursBetween } from "./date.mjs"
+import { filterWithReasons } from "./drops.mjs"
 import { velocity } from "./score.mjs"
 import { KANA_RE } from "./youtube.mjs"
 
@@ -135,7 +136,7 @@ export function toSoundcloudCandidate(t, genre, now = new Date()) {
  * ジャンルの tags（SoundCloud のジャンル・タグ）と queries（キーワード）で直近の曲を検索し、候補にする。
  * 検索は API キー不要で、X のような従量課金もない
  */
-export async function searchSoundcloudGenre(genre, now = new Date()) {
+export async function searchSoundcloudGenre(genre, now = new Date(), drops = {}) {
   const pages = genre.pages ?? 2
   const created = genre.maxTrackAgeDays > 7 ? "last_month" : "last_week"
   const searches = [
@@ -149,13 +150,16 @@ export async function searchSoundcloudGenre(genre, now = new Date()) {
 
   const maxAgeDays = genre.maxTrackAgeDays ?? 7
   const requireKana = genre.requireKana ?? true
-  const tracks = [...byId.values()].filter(
-    (t) =>
-      isPlayable(t) &&
-      (!requireKana || trackHasKana(t)) &&
-      hoursBetween(trackPublishedAt(t), now) <= maxAgeDays * 24 &&
-      (t.likes_count ?? 0) >= (genre.minLikes ?? 0) &&
-      (t.user?.followers_count ?? 0) >= (genre.minFollowers ?? 0),
+  const tracks = filterWithReasons(
+    [...byId.values()],
+    [
+      ["再生・埋め込み不可", isPlayable],
+      ["仮名なし", (t) => !requireKana || trackHasKana(t)],
+      ["古い曲", (t) => hoursBetween(trackPublishedAt(t), now) <= maxAgeDays * 24],
+      ["いいね不足", (t) => (t.likes_count ?? 0) >= (genre.minLikes ?? 0)],
+      ["フォロワー不足", (t) => (t.user?.followers_count ?? 0) >= (genre.minFollowers ?? 0)],
+    ],
+    drops,
   )
   console.log(`[soundcloud] ${genre.id}: ${searches.length}回の検索で ${byId.size}曲（条件に合う曲: ${tracks.length}曲）`)
   return tracks.map((t) => toSoundcloudCandidate(t, genre, now))

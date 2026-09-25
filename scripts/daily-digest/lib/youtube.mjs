@@ -1,3 +1,4 @@
+import { countDrop, filterWithReasons } from "./drops.mjs"
 import { velocity, youtubeEngagement } from "./score.mjs"
 
 const API = "https://www.googleapis.com/youtube/v3"
@@ -67,13 +68,19 @@ async function isShort(id) {
  * ショートと、長すぎる動画（歌枠・雑談などの配信アーカイブ）を除く。
  * ショートは3分まであるので、それ以下の長さの動画だけを確かめる
  */
-export async function excludeShortsAndStreams(videos, yc) {
+export async function excludeShortsAndStreams(videos, yc, drops) {
   const maxSeconds = (yc.maxDurationMinutes ?? 15) * 60
   const kept = []
   for (const v of videos) {
     const sec = durationSeconds(v)
-    if (sec != null && sec > maxSeconds) continue
-    if (yc.excludeShorts !== false && (sec == null || sec <= 180) && (await isShort(v.id))) continue
+    if (sec != null && sec > maxSeconds) {
+      countDrop(drops, "長い動画（配信）")
+      continue
+    }
+    if (yc.excludeShorts !== false && (sec == null || sec <= 180) && (await isShort(v.id))) {
+      countDrop(drops, "ショート")
+      continue
+    }
     kept.push(v)
   }
   return kept
@@ -129,7 +136,7 @@ export function toYoutubeCandidate(v, genre, now = new Date()) {
  * 対象期間（window）に公開された動画を再生数順に検索する。
  * search.list は1回100ユニット消費するので、ジャンルごとに1回だけ呼ぶ。
  */
-export async function searchYoutubeGenre(genre, window, config, key, now = new Date()) {
+export async function searchYoutubeGenre(genre, window, config, key, now = new Date(), drops = {}) {
   const yc = config.youtube
   const search = await ytGet(
     "/search",
@@ -151,11 +158,16 @@ export async function searchYoutubeGenre(genre, window, config, key, now = new D
   if (ids.length === 0) return []
 
   const requireKana = genre.requireKana ?? yc.requireKana
-  const videos = (await fetchVideos(ids, key))
-    .filter(isEmbeddable)
-    .filter((v) => !requireKana || hasKana(v))
-    .filter((v) => Number(v.statistics?.viewCount ?? 0) >= (genre.minViews ?? yc.minViews))
-  return (await excludeShortsAndStreams(videos, yc)).map((v) => toYoutubeCandidate(v, genre, now))
+  const videos = filterWithReasons(
+    await fetchVideos(ids, key),
+    [
+      ["埋め込み不可", isEmbeddable],
+      ["仮名なし", (v) => !requireKana || hasKana(v)],
+      ["再生数不足", (v) => Number(v.statistics?.viewCount ?? 0) >= (genre.minViews ?? yc.minViews)],
+    ],
+    drops,
+  )
+  return (await excludeShortsAndStreams(videos, yc, drops)).map((v) => toYoutubeCandidate(v, genre, now))
 }
 
 /** 削除・非公開・埋め込み不可になった動画IDを返す */
