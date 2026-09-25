@@ -3,8 +3,9 @@
  * タイトル・説明の添削も selection.json の topic / description を直して render し直す。
  *
  * 既定はプレビュー用: 候補を上限で削らずにすべて載せ、項目ごとの注意（note）と警告の一覧を記事に表示する。
- * 人間はプレビューを見てから載せる項目を決める。--final（publish が自動で使う）では警告を出さず、
- * 上限を超えていればエラーにする。
+ * 人間はプレビューで項目ごとの採用トグル（pnpm dev のときだけ出る）を切り替えて、載せる項目を決める。
+ * 採用・不採用は selection.json の各項目の adopt に保存される（false が不採用、それ以外は採用）。
+ * --final（publish が自動で使う）では、採用の項目だけを警告なしで載せ、上限を超えていればエラーにする。
  */
 import { spawnSync } from "node:child_process"
 import fs from "node:fs"
@@ -48,17 +49,21 @@ export function render(ctx, { force = false, final = false } = {}) {
       continue
     }
     if (seen.has(key)) continue
+    // 公開用には、プレビューで不採用にした項目を載せない
+    if (final && item.adopt === false) continue
     const label = e.c.genreLabel
     seen.add(key)
-    perCategory.set(label, (perCategory.get(label) ?? 0) + 1)
+    // 上限は採用した項目で数える
+    if (item.adopt !== false) perCategory.set(label, (perCategory.get(label) ?? 0) + 1)
     items.push({ ...item, key })
   }
   // プレビューでは上限を超えても載せ、どれを外すか人間が決められるようにする（カテゴリ・記事全体ごとに1行で知らせる）
   for (const [label, n] of perCategory) {
-    if (n > categoryLimit(label)) overLimit.push(`${label}: ${n}件（上限 ${categoryLimit(label)}件）`)
+    if (n > categoryLimit(label)) overLimit.push(`${label}: 採用 ${n}件（上限 ${categoryLimit(label)}件）`)
   }
-  if (items.length > config.article.maxItems) {
-    overLimit.push(`記事全体: ${items.length}件（上限 ${config.article.maxItems}件）`)
+  const adopted = items.filter((i) => i.adopt !== false).length
+  if (adopted > config.article.maxItems) {
+    overLimit.push(`記事全体: 採用 ${adopted}件（上限 ${config.article.maxItems}件）`)
   }
   if (final && overLimit.length) {
     throw new Error(`上限を超えている項目があります。selection.json から外してください:\n${overLimit.join("\n")}`)
@@ -96,6 +101,7 @@ export function render(ctx, { force = false, final = false } = {}) {
     date,
     selection: { topic, topicKey, description: raw.description ?? "", items, news: raw.news ?? [] },
     review: reviewWarnings,
+    categoryLimit,
     candidatesByKey: new Map([...available].map(([k, e]) => [k, e.c])),
     category: config.article.category,
     fixedTags: config.article.tags ?? [],

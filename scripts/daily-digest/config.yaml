@@ -4,11 +4,11 @@
 
 article:
   minItems: 5 # これ未満しか採用できなければ記事を作らない
-  maxItems: 20
+  maxItems: 30
   maxItemsPerCategory: 4 # 同じカテゴリはカルーセルにまとめるので、数件まで載せる
   # カテゴリごとに上限を変える場合（label: 件数）
   maxItemsByCategory:
-    音楽・MV: 8
+    音楽・MV: 12
   # 記事内でのカテゴリの表示順。genres の label をすべて並べる（抜けていると実行時にエラー）
   categoryOrder:
     - 音楽・MV
@@ -21,7 +21,6 @@ article:
     - セール
     - 伸びているイラスト
     - 風景写真
-    - Misskeyで話題
   category: デイリーダイジェスト
   # 手書きの記事と見分けるため、生成記事に必ず付けるタグ
   tags: [自動生成]
@@ -31,7 +30,7 @@ collect:
   windowHours: 24 # 実行時点から何時間さかのぼって集めるか
 
 review:
-  candidatesPerGenre: 6 # ジャンルごとに候補一覧に出す上位件数（pin した候補は別枠で必ず出る）
+  candidatesPerGenre: 10 # ジャンルごとに候補一覧に出す上位件数（pin した候補は別枠で必ず出る）
 
 # pnpm digest select --llm で API の LLM に選ばせるときだけ使う
 llm:
@@ -62,12 +61,16 @@ x:
 youtube:
   regionCode: JP
   relevanceLanguage: ja
-  maxResults: 25
+  maxResults: 50 # search.list は件数にかかわらず1回100ユニットなので、上限まで取る
   minViews: 1000
   # タイトルかチャンネル名に仮名（ひらがな・カタカナ）がある動画だけ残す。ジャンルごとに上書きできる
   requireKana: true
   excludeShorts: true # ショート動画を除く（/shorts/<ID> が開けるかで判定する）
   maxDurationMinutes: 15 # これより長い動画（歌枠・雑談などの配信アーカイブ）を除く
+  # 音楽・MV に載せないタイトル（アニメの PV・予告・CM など）。ジャンルごとに excludeTitle で上書きできる
+  excludeTitle: "PV|Trailer|トレーラー|ティザー|予告|告知|CM|番宣|本編|切り抜き|生成してみた|AIカバー|AI歌唱"
+  # 何時間前までに公開された動画を検索するか（音楽は24時間では再生数が集まらないので長めに）
+  windowHours: 72
 
 steam:
   enabled: true
@@ -149,6 +152,7 @@ genres:
 
   - id: illust
     label: 伸びているイラスト
+    step: X
     source: x
     sampleRetweets: true
     xWeight: 2 # リツイートの標本が多いほど人気の投稿が重なって見えるので、読み取りを多めに配分する
@@ -201,8 +205,9 @@ genres:
     label: 音楽・MV
     step: アニソン
     source: youtube
-    # アニメ公式チャンネルは「音楽」以外のカテゴリで上げることが多いのでカテゴリは絞らない
-    q: "ノンクレジット|アニメ主題歌|アニソン|TVアニメ|オープニング映像|エンディング映像"
+    # アニメ公式チャンネルは「音楽」以外のカテゴリで上げることが多いのでカテゴリは絞らない。
+    # PV・予告は excludeTitle で除く。q の | の間に空白を入れると検索が崩れる（ほとんど当たらなくなる）
+    q: "ノンクレジット|アニメ主題歌|アニソン|オープニング映像|エンディング映像|OPテーマ|EDテーマ|TVアニメ"
 
   - id: vocaloid
     label: 音楽・MV
@@ -217,6 +222,21 @@ genres:
     source: youtube
     videoCategoryId: "10"
     q: "MV|ミュージックビデオ|Music Video"
+
+  # 音楽の候補を増やすための検索（アーティスト公式の新曲・インディー・ボカロ P のオリジナル曲）
+  - id: new-song
+    label: 音楽・MV
+    step: MV・新曲
+    source: youtube
+    videoCategoryId: "10"
+    # 英語の語（Official Video など）を入れると海外の MV ばかりになるので日本語の語だけにする
+    q: "新曲|オリジナル曲|ミュージックビデオ|リリックビデオ|公式MV|書き下ろし"
+
+  - id: vocaloid-original
+    label: 音楽・MV
+    step: ボカロ・歌ってみた
+    source: youtube
+    q: "初音ミク|重音テト|可不|鏡音リン|GUMI|知声|小春六花|ボカロP|VOCALOID"
 
   - id: music
     label: 音楽・MV
@@ -236,7 +256,7 @@ genres:
     queries: [初音ミク, 重音テト, 可不]
     pages: 2 # 1回の検索で読むページ数（1ページ50曲）
     maxTrackAgeDays: 7
-    minLikes: 5
+    minLikes: 3
 
   # ---- X API の代わり（2026-09-26〜）----
   # はてなブックマークの人気エントリー（カテゴリ別 RSS）。include に当たる記事をブックマーク数の伸び率で並べる。
@@ -251,14 +271,22 @@ genres:
     exclude: "規制|反AI|盗用|窃盗|炎上"
     minBookmarks: 30
 
+  # ツールの話題は人気エントリーに入りにくいので、ツール名のタグ検索と公式・専門サイトの RSS も読み、
+  # 1週間以内の記事をブックマーク数で並べる
   - id: hatena-tools
     label: 最新クリエイティブツール
     source: hatena
     categories: [it, game, knowledge]
+    tags: [Blender, Photoshop, Illustrator, CLIP STUDIO PAINT, クリスタ, Live2D, Figma, Unity, Unreal Engine, Godot, Krita, After Effects, DaVinci Resolve, 3DCG]
+    feeds:
+      - https://forest.watch.impress.co.jp/data/rss/1.0/wf/feed.rdf # 窓の杜（ソフトの更新情報）
+      - https://www.blender.org/feed/
+      - https://unity.com/ja/blog/rss
+    maxAgeHours: 168
     include: "Blender|Photoshop|CLIP STUDIO|クリスタ|Figma|After Effects|Premiere|DaVinci|Procreate|Live2D|Unity|Unreal Engine|Krita|ZBrush|Illustrator|Adobe|Godot|Aseprite|3DCG|フォント|描き方|お絵描き"
     # 規約・決済をめぐる騒動は「ネットで話題のニュース」で扱う
     exclude: "炎上|騒動|規制|検閲|決済"
-    minBookmarks: 20
+    minBookmarks: 5
 
   - id: hatena-games
     label: 最新ゲーム
@@ -270,15 +298,20 @@ genres:
   # Bluesky の人気の投稿（イラスト）。AI 絵はタグ・投稿者名で除く
   - id: bluesky-illust
     label: 伸びているイラスト
+    step: Bluesky
     source: bluesky
     queries: ["#イラスト", "#絵描きさんと繋がりたい", "#一次創作", "#創作", "#落書き", "#illustration"]
     requireImages: true
     minLikes: 100
     exclude: "AIイラスト|AIart|aiart|AI生成|AIグラビア|StableDiffusion|NovelAI|nijijourney|使用モデル|#NSFW|R-?18|_AI\\b|AI$"
 
-  # Misskey.io の人気ノート（検証中）。注意書き（CW）・センシティブ指定の画像があるノートは除く
-  - id: misskey
-    label: Misskeyで話題
+  # Misskey.io の人気ノートのうち、画像付きのもの（イラストの質が高い）。
+  # 注意書き（CW）・センシティブ指定の画像があるノートは除く
+  - id: misskey-illust
+    label: 伸びているイラスト
+    step: Misskey
     source: misskey
     host: misskey.io
+    requireImages: true
     minReactions: 50
+    exclude: "🔞|R-?18|NSFW|ドスケベ|えっち|エロ|AIイラスト|AIart|AI生成"

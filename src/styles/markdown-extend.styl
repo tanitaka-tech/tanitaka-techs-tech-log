@@ -224,12 +224,6 @@
       &:hover
         background: var(--btn-plain-bg-hover)
 
-      // プレビュー中（ホバー・なぞるモード）の項目
-      &.previewing
-        background: var(--btn-plain-bg-hover)
-        outline: 1px dashed var(--primary)
-        outline-offset: -1px
-
       // クリックで選んだときは枠を出さず、キーボード操作のときだけ出す
       &:focus:not(:focus-visible)
         outline: none
@@ -665,9 +659,51 @@
     p, ul
       margin: 0.25rem 0
 
-  .digest-entry:has(.digest-review-note)
+  .digest-entry:has(.digest-review-note), .digest-entry:has(.digest-review-bar)
     flex-direction: column
     align-items: center
+
+  // プレビューの採用トグル（pnpm dev のときだけ保存できる）
+  .digest-review-bar
+    display: flex
+    justify-content: flex-end
+    width: 100%
+    margin-bottom: 0.5rem
+
+  .digest-review-toggle
+    padding: 0.35rem 0.9rem
+    border-radius: 999px
+    font-size: 0.85rem
+    font-weight: bold
+    background: rgba(40, 170, 90, 0.18)
+
+    &[aria-pressed="false"]
+      background: rgba(220, 60, 60, 0.16)
+
+    &:disabled
+      opacity: 0.5
+
+  .digest-entry[data-adopt="false"] > :not(.digest-review-bar)
+    opacity: 0.35
+
+  .digest-review-count
+    font-size: 0.8rem
+    font-weight: bold
+    color: #2a9d5c
+
+    &.over
+      color: #d33
+
+  .digest-review-status
+    font-weight: bold
+
+  .digest-review-badge
+    flex-shrink: 0
+    margin-left: auto
+    font-size: 0.8rem
+
+  [role=tab].digest-rejected
+    opacity: 0.45
 
   .digest-review-note
     width: 100%
@@ -735,7 +771,7 @@
       opacity: 0.7
 
   // Misskey のノートのカード（Misskey の埋め込みは他サイトに出せないので自前で描く）
-  a.digest-misskey-card
+  .digest-misskey-card
     display: flex
     flex-direction: column
     gap: 0.5rem
@@ -744,11 +780,10 @@
     padding: 0.75rem 1rem
     border-radius: 0.75rem
     background: var(--card-bg)
-    color: inherit
-    text-decoration: none
 
-    &:hover
-      background: var(--btn-card-bg-hover)
+    a
+      color: inherit
+      text-decoration: none
 
     img
       margin: 0
@@ -765,6 +800,7 @@
         border-radius: 999px
 
     .digest-misskey-text
+      margin: 0
       white-space: pre-wrap
       word-break: break-word
       line-height: 1.6
@@ -776,15 +812,21 @@
       &.n2, &.n3, &.n4
         grid-template-columns: 1fr 1fr
 
+      // 縦長の絵も切れないよう、枠に収まる大きさで全体を見せる（クリックで拡大）
       img
         width: 100%
-        max-height: 360px
+        max-height: 480px
         border-radius: 0.5rem
-        object-fit: cover
+        object-fit: contain
+        background: var(--btn-regular-bg-active)
+        cursor: zoom-in
 
     .digest-misskey-meta
       font-size: 0.8rem
       opacity: 0.7
+
+      &:hover
+        text-decoration: underline
 
   .bluesky-embed
     margin: 0 !important

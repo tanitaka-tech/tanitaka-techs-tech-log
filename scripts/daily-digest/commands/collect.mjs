@@ -60,7 +60,11 @@ async function fetchAll(ctx, genres) {
       } else if (genre.source === "soundcloud") {
         found = await searchSoundcloudGenre(genre, now, drops)
       } else if (genre.source === "youtube") {
-        found = await searchYoutubeGenre(genre, window, config, requireEnv("YOUTUBE_API_KEY"), now, drops)
+        // 音楽は24時間では再生数が集まらないので、youtube.windowHours（ジャンルごとに上書き可）までさかのぼる。
+        // 掲載済みの動画は review で外れるので、翌日以降に同じ動画が載ることはない
+        const hours = genre.windowHours ?? config.youtube.windowHours
+        const ytWindow = hours ? recentWindow(now, hours) : window
+        found = await searchYoutubeGenre(genre, ytWindow, config, requireEnv("YOUTUBE_API_KEY"), now, drops)
       } else if (genre.source === "steam" && config.steam.enabled) {
         found = await fetchSteamSales(genre, config)
       }
@@ -146,7 +150,10 @@ async function collectSome(ctx, only) {
   const { candidates, errors, stats, xReads } = await fetchAll(ctx, genres)
 
   const saved = readJson(paths.candidates)
-  const merged = [...saved.filter((c) => !ids.has(c.genre)), ...candidates]
+  // 取り直したジャンルの分と、config.yaml から消したジャンルの分、取り直した候補と同じもの（別ジャンルで集めた分）は捨てる
+  const known = new Set(ctx.config.genres.map((g) => g.id))
+  const fresh = new Set(candidates.map((c) => c.key))
+  const merged = [...saved.filter((c) => !ids.has(c.genre) && known.has(c.genre) && !fresh.has(c.key)), ...candidates]
   writeJson(paths.candidates, merged)
   const collected = readJson(paths.collect, {})
   writeJson(paths.collect, {

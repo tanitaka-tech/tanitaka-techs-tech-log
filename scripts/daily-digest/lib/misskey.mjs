@@ -34,8 +34,8 @@ export function toMisskeyCandidate(n, genre, host, now = new Date()) {
     url: `https://${host}/notes/${n.id}`,
     title: "",
     thumbnail: images[0]?.thumbnailUrl ?? images[0]?.url,
-    // 自前のカードに出す画像（最大4枚）
-    images: images.slice(0, 4).map((f) => f.thumbnailUrl ?? f.url),
+    // 自前のカードに出す画像（最大4枚）。クリックで元の大きさで見られるよう、縮小版ではなく元の画像
+    images: images.slice(0, 4).map((f) => f.url),
     text: (n.text ?? "").slice(0, 400),
     author: {
       id: n.user.id,

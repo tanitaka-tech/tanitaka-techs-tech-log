@@ -17,6 +17,7 @@ import { GithubCardComponent } from "./src/plugins/rehype-component-github-card.
 import { parseDirectiveNode } from "./src/plugins/remark-directive-rehype.js";
 import { remarkExcerpt } from "./src/plugins/remark-excerpt.js";
 import { remarkReadingTime } from "./src/plugins/remark-reading-time.mjs";
+import { digestReview } from "./scripts/daily-digest/dev-review.mjs";
 
 // https://astro.build/config
 export default defineConfig({
@@ -24,6 +25,8 @@ export default defineConfig({
 	base: "/tanitaka-techs-tech-log/",
 	trailingSlash: "always",
 	integrations: [
+		// デイリーダイジェストのプレビューで採用・不採用を保存する API（pnpm dev のときだけ）
+		digestReview(),
 		tailwind({
 			nesting: true,
 		}),

@@ -86,6 +86,12 @@ export async function excludeShortsAndStreams(videos, yc, drops) {
   return kept
 }
 
+/** タイトルが除外の正規表現（genre.excludeTitle か youtube.excludeTitle。PV・予告など）に当たらないか */
+export function titleAllowed(v, genre, yc) {
+  const pattern = genre.excludeTitle ?? yc.excludeTitle
+  return !pattern || !new RegExp(pattern, "i").test(v.snippet?.title ?? "")
+}
+
 export function isEmbeddable(v) {
   return v.status?.embeddable && v.status?.privacyStatus === "public"
 }
@@ -162,6 +168,7 @@ export async function searchYoutubeGenre(genre, window, config, key, now = new D
     await fetchVideos(ids, key),
     [
       ["埋め込み不可", isEmbeddable],
+      ["除外するタイトル", (v) => titleAllowed(v, genre, yc)],
       ["仮名なし", (v) => !requireKana || hasKana(v)],
       ["再生数不足", (v) => Number(v.statistics?.viewCount ?? 0) >= (genre.minViews ?? yc.minViews)],
     ],
