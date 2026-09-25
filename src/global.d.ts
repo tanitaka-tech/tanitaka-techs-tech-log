@@ -4,6 +4,8 @@ declare global {
 	interface Window {
 		// type from '@swup/astro' is incorrect
 		swup: AstroIntegration;
+		// X の埋め込み用 widgets.js
+		twttr?: { widgets: { load: (el?: Element) => void } };
 		pagefind: {
 			search: (query: string) => Promise<{
 				results: Array<{

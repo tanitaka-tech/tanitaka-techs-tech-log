@@ -84,6 +84,36 @@
     margin-right: auto
     max-width: 100%
 
+  // デイリーダイジェストの埋め込み
+  .digest-genre
+    display: inline-block
+    padding: 0.1rem 0.6rem
+    border-radius: 999px
+    font-size: 0.8rem
+    background: var(--btn-regular-bg)
+    color: var(--btn-content)
+
+  .digest-embed
+    margin: 1rem 0 2rem
+    display: flex
+    justify-content: center
+
+    .twitter-tweet
+      border: none
+      padding: 0
+      margin: 0
+
+    iframe.digest-youtube
+      width: 100%
+      aspect-ratio: 16 / 9
+      height: auto
+
+    iframe.digest-steam
+      width: 100%
+      max-width: 646px
+      height: 190px
+      border: none
+
 a.card-github
   display: block
   background: var(--license-block-bg)
