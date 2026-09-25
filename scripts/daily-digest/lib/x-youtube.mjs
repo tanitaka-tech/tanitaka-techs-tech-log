@@ -65,17 +65,23 @@ async function listPosts(genre, window, token, limit) {
   return { posts, users }
 }
 
-/** 動画IDごとに、共有したアカウント（重複なし）とその投稿のいいね数を集計する */
-export function aggregateShares(posts, users, window) {
+/** 投稿に貼られたリンクの展開後の URL */
+export function postUrls(t) {
+  return (t.entities?.urls ?? []).map((u) => u.unwound_url ?? u.expanded_url ?? "")
+}
+
+/**
+ * リンク先（linkId で URL から取り出した ID）ごとに、共有したアカウント（重複なし）とその投稿のいいね数を集計する。
+ * linkId は対象外の URL に null を返す
+ */
+export function aggregateShares(posts, users, window, linkId = youtubeVideoId) {
   const byVideo = new Map()
   for (const t of posts) {
     const user = users.get(t.author_id)
     if (!user || user.protected || t.possibly_sensitive) continue
     const at = new Date(t.created_at)
     if (at < window.start || at > window.end) continue
-    const ids = new Set(
-      (t.entities?.urls ?? []).map((u) => youtubeVideoId(u.unwound_url ?? u.expanded_url ?? "")).filter(Boolean),
-    )
+    const ids = new Set(postUrls(t).map(linkId).filter(Boolean))
     for (const id of ids) {
       const sharers = byVideo.get(id) ?? new Map()
       // 同じ人が何度貼っても1人として数え、いいね数は一番伸びた投稿のものを使う
@@ -95,21 +101,40 @@ export function shareScore(sharers) {
   return list.length + Math.log10(1 + totalLikes) / 10
 }
 
-export async function collectXYoutubeGenre(genre, window, config, { xToken, ytKey }, budget, now = new Date(), share = Infinity) {
+/**
+ * ジャンルの query（検索）か listId（リスト）で投稿を読む。読んだ件数は budget から引く。
+ * 読めないとき（listId が空・読み取り上限）は null
+ */
+export async function readSharePosts(genre, window, config, xToken, budget, share = Infinity) {
   const limit = Math.min(genre.maxReads ?? config.x.maxResultsPerQuery, budget.remaining, share)
   if (genre.listId !== undefined && !genre.listId) {
     console.warn(`[x] ${genre.id}: listId が未設定なのでスキップ`)
-    return []
+    return null
   }
   if (limit < 10) {
     console.warn(`[x] 読み取り上限に達したため ${genre.id} をスキップ`)
-    return []
+    return null
   }
-
-  const { posts, users } = genre.listId
+  const read = genre.listId
     ? await listPosts(genre, window, xToken, limit)
     : await searchPosts(genre, window, config, xToken, limit)
-  budget.remaining -= posts.length
+  budget.remaining -= read.posts.length
+  return read
+}
+
+/** 共有者の一覧を候補に付ける。id を残しておき、curation.yaml の ignore-sharer で後から除けるようにする */
+export function attachSharers(c, sharers) {
+  c.metrics.sharers = sharers.size
+  c.sharers = [...sharers].map(([id, s]) => ({ id, ...s })).sort((a, b) => b.likes - a.likes)
+  c.sharedBy = c.sharers.map((s) => `@${s.handle}`)
+  c.score = shareScore(sharers)
+  return c
+}
+
+export async function collectXYoutubeGenre(genre, window, config, { xToken, ytKey }, budget, now = new Date(), share = Infinity) {
+  const read = await readSharePosts(genre, window, config, xToken, budget, share)
+  if (!read) return []
+  const { posts, users } = read
 
   const byVideo = aggregateShares(posts, users, window)
   const minSharers = genre.minSharers ?? 1
@@ -124,16 +149,5 @@ export async function collectXYoutubeGenre(genre, window, config, { xToken, ytKe
     .filter(isEmbeddable)
     .filter((v) => !requireKana || hasKana(v))
     .filter((v) => hoursBetween(new Date(v.snippet.publishedAt), now) <= maxAgeDays * 24)
-    .map((v) => {
-      const sharers = byVideo.get(v.id)
-      const c = toYoutubeCandidate(v, genre, now)
-      c.metrics.sharers = sharers.size
-      // 共有者の id を残しておき、curation.yaml の ignore-sharer で後から除けるようにする
-      c.sharers = [...sharers]
-        .map(([id, s]) => ({ id, ...s }))
-        .sort((a, b) => b.likes - a.likes)
-      c.sharedBy = c.sharers.map((s) => `@${s.handle}`)
-      c.score = shareScore(sharers)
-      return c
-    })
+    .map((v) => attachSharers(toYoutubeCandidate(v, genre, now), byVideo.get(v.id)))
 }

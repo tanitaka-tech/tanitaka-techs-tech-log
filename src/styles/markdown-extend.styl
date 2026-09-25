@@ -400,6 +400,11 @@
     .digest-dot[data-distance="5"]::before
       transform: scale(0.5)
 
+      // SoundCloud のアートワークは正方形
+      &.soundcloud
+        width: 2.25rem
+        aspect-ratio: 1
+
   // 目次の区切り（data-step）の小見出し
   .digest-toc-step
     padding: 0.75rem 0.75rem 0.25rem
@@ -442,7 +447,7 @@
     .twitter-tweet
       margin: 0 !important
 
-    iframe.digest-youtube
+    iframe.digest-youtube, iframe.digest-soundcloud
       display: block
       width: 100%
       aspect-ratio: 16 / 9
@@ -506,6 +511,98 @@
 
     // 右下の再生数（収集時点）
     .digest-youtube-views
+      position: absolute
+      right: 0.5rem
+      bottom: 0.5rem
+      padding: 0.1rem 0.4rem
+      border-radius: 0.25rem
+      font-size: 0.75rem
+      line-height: 1.4
+      color: #fff
+      background: rgba(0, 0, 0, 0.7)
+
+  // SoundCloud のアートワーク。ぼかしたアートワークを背景に敷き、YouTube と同じ 16:9 に揃える。
+  // クリックでプレーヤーに差し替える
+  a.digest-soundcloud-facade
+    position: relative
+    display: block
+    width: 100%
+    aspect-ratio: 16 / 9
+    overflow: hidden
+    border-radius: 0.75rem
+    background: #111
+
+    img
+      margin: 0
+      border-radius: 0
+
+    .digest-soundcloud-bg
+      position: absolute
+      inset: 0
+      width: 100%
+      height: 100%
+      object-fit: cover
+      filter: blur(24px) brightness(0.6)
+      transform: scale(1.2)
+
+    .digest-soundcloud-art
+      position: absolute
+      top: 50%
+      left: 50%
+      height: 64%
+      aspect-ratio: 1
+      object-fit: cover
+      border-radius: 0.5rem
+      transform: translate(-50%, -50%)
+      box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.5)
+
+    .digest-soundcloud-title
+      position: absolute
+      top: 0
+      left: 0
+      right: 0
+      padding: 0.75rem 1rem 2.5rem
+      overflow: hidden
+      white-space: nowrap
+      text-overflow: ellipsis
+      font-weight: 500
+      color: #fff
+      background: linear-gradient(rgba(0, 0, 0, 0.6), transparent)
+
+    .digest-soundcloud-author
+      display: block
+      overflow: hidden
+      text-overflow: ellipsis
+      font-size: 0.8rem
+      font-weight: normal
+      opacity: 0.8
+
+    // SoundCloud のオレンジの再生ボタン
+    .digest-soundcloud-play
+      position: absolute
+      top: 50%
+      left: 50%
+      width: 56px
+      height: 56px
+      margin: -28px 0 0 -28px
+      border-radius: 999px
+      background: rgba(33, 33, 33, 0.8)
+      transition: background 0.15s
+
+      &::after
+        content: ""
+        position: absolute
+        top: 17px
+        left: 22px
+        border-style: solid
+        border-width: 11px 0 11px 18px
+        border-color: transparent transparent transparent #fff
+
+    &:hover .digest-soundcloud-play
+      background: #f50
+
+    // 右下の再生数（収集時点）
+    .digest-soundcloud-plays
       position: absolute
       right: 0.5rem
       bottom: 0.5rem

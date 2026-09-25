@@ -1,11 +1,12 @@
 /*
- * X・YouTube・Steam から、実行時点までの直近24時間（config.yaml の collect.windowHours）の候補を集めて
+ * X・YouTube・SoundCloud・Steam から、実行時点までの直近24時間（config.yaml の collect.windowHours。SoundCloud は7日）の候補を集めて
  * .digest-cache/<date>/candidates.json に保存する。<date> は記事の日付（既定は今日）。
  * X は従量課金なので、保存済みなら --force を付けない限り取り直さない。
  */
 import fs from "node:fs"
 import { writeJson } from "../lib/context.mjs"
 import { recentWindow, todayJst } from "../lib/date.mjs"
+import { searchSoundcloudGenre } from "../lib/soundcloud.mjs"
 import { fetchSteamSales } from "../lib/steam.mjs"
 import { searchXGenre } from "../lib/x.mjs"
 import { collectXYoutubeGenre } from "../lib/x-youtube.mjs"
@@ -40,6 +41,8 @@ async function fetchAll(ctx) {
       } else if (genre.source === "x-youtube") {
         const keys = { xToken: requireEnv("X_BEARER_TOKEN"), ytKey: requireEnv("YOUTUBE_API_KEY") }
         found = await collectXYoutubeGenre(genre, window, config, keys, budget, now, takeShare(genre))
+      } else if (genre.source === "soundcloud") {
+        found = await searchSoundcloudGenre(genre, now)
       } else if (genre.source === "youtube") {
         found = await searchYoutubeGenre(genre, window, config, requireEnv("YOUTUBE_API_KEY"), now)
       } else if (genre.source === "steam" && config.steam.enabled) {

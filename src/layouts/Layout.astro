@@ -661,7 +661,7 @@ function setupDigestHeading(heading: HTMLElement, body: HTMLElement, count: numb
 		section?.classList.toggle("digest-collapsed", !open)
 		// 閉じている間は中の要素にフォーカスが移らないようにし、再生中の動画も止める
 		body.inert = !open
-		if (!open) for (const { frame, player } of youtubePlayers) if (body.contains(frame)) player.pauseVideo?.()
+		if (!open) for (const { frame, pause } of mediaPlayers) if (body.contains(frame)) pause()
 	}
 	setOpen(true)
 	heading.addEventListener("click", (e) => {
@@ -914,7 +914,7 @@ function setupDigestLists() {
 				// 見えなくなる項目の動画は止める
 				const previous = entries[active]
 				if (previous) {
-					for (const { frame, player } of youtubePlayers) if (previous.contains(frame)) player.pauseVideo?.()
+					for (const { frame, pause } of mediaPlayers) if (previous.contains(frame)) pause()
 				}
 				active = i
 				tabs.forEach((tab, j) => {
@@ -1066,9 +1066,12 @@ function setupDigestLists() {
 	}
 }
 
-// YouTube は最初サムネイルだけを表示し、クリックでプレーヤーに差し替える。
-// 1本再生したら他を一時停止する
-let youtubePlayers: { frame: HTMLIFrameElement; player: { pauseVideo?: () => void } }[] = []
+// YouTube・SoundCloud は最初サムネイルだけを表示し、クリックでプレーヤーに差し替える。
+// 1本再生したら他（YouTube と SoundCloud の両方）を一時停止する
+let mediaPlayers: { frame: HTMLIFrameElement; pause: () => void }[] = []
+const pauseOthers = (frame?: HTMLIFrameElement) => {
+	for (const other of mediaPlayers) if (other.frame !== frame) other.pause()
+}
 const youtubeApiCallbacks: (() => void)[] = []
 
 function withYouTubeApi(callback: () => void) {
@@ -1102,7 +1105,7 @@ function setupYoutube() {
 			iframe.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
 			iframe.allowFullscreen = true
 			facade.replaceWith(iframe)
-			for (const other of youtubePlayers) other.player.pauseVideo?.()
+			pauseOthers()
 			withYouTubeApi(() => {
 				const YT = window.YT
 				if (!YT) return
@@ -1110,11 +1113,52 @@ function setupYoutube() {
 					events: {
 						onStateChange: (event) => {
 							if (event.data !== YT.PlayerState.PLAYING) return
-							for (const other of youtubePlayers) if (other.player !== player) other.player.pauseVideo?.()
+							pauseOthers(iframe)
 						},
 					},
 				})
-				youtubePlayers.push({ frame: iframe, player })
+				mediaPlayers.push({ frame: iframe, pause: () => player.pauseVideo?.() })
+			})
+		})
+	}
+}
+
+function withSoundcloudApi(callback: () => void) {
+	if (window.SC?.Widget) return callback()
+	let script = document.getElementById("soundcloud-widget-api") as HTMLScriptElement | null
+	if (!script) {
+		script = document.createElement("script")
+		script.id = "soundcloud-widget-api"
+		script.src = "https://w.soundcloud.com/player/api.js"
+		document.body.appendChild(script)
+	}
+	script.addEventListener("load", callback, { once: true })
+}
+
+function setupSoundcloud() {
+	const facades = [...document.querySelectorAll<HTMLAnchorElement>("a.digest-soundcloud-facade")].filter(
+		(a) => !a.dataset.ready,
+	)
+	if (facades.length === 0) return
+	withSoundcloudApi(() => {})
+	for (const facade of facades) {
+		facade.dataset.ready = "true"
+		facade.addEventListener("click", (e) => {
+			e.preventDefault()
+			const iframe = document.createElement("iframe")
+			iframe.className = "digest-soundcloud"
+			const track = encodeURIComponent(`https://api.soundcloud.com/tracks/${facade.dataset.trackId}`)
+			iframe.src = `https://w.soundcloud.com/player/?url=${track}&auto_play=true&visual=true&show_comments=false&show_reposts=false`
+			iframe.title = facade.dataset.title ?? ""
+			iframe.allow = "autoplay; encrypted-media"
+			facade.replaceWith(iframe)
+			pauseOthers()
+			withSoundcloudApi(() => {
+				const SC = window.SC
+				if (!SC) return
+				const widget = SC.Widget(iframe)
+				widget.bind(SC.Widget.Events.PLAY, () => pauseOthers(iframe))
+				mediaPlayers.push({ frame: iframe, pause: () => widget.pause() })
 			})
 		})
 	}
@@ -1122,10 +1166,11 @@ function setupYoutube() {
 
 function renderDigest() {
 	// ページ遷移で前のページの動画は消えている
-	youtubePlayers = []
+	mediaPlayers = []
 	renderTweets()
 	setupDigestLists()
 	setupYoutube()
+	setupSoundcloud()
 }
 
 renderDigest()

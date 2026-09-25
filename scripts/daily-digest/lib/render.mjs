@@ -59,6 +59,16 @@ function youtubeViews(c) {
   return `<span class="digest-youtube-views" title="収集時点の再生数">${compactNumber.format(views)}回視聴</span>`
 }
 
+/** SoundCloud のアートワーク右下に出す再生数（収集時点） */
+function soundcloudPlays(c) {
+  const plays = c.metrics?.plays
+  if (plays == null) return ""
+  return `<span class="digest-soundcloud-plays" title="収集時点の再生数">${compactNumber.format(plays)}回再生</span>`
+}
+
+/** SoundCloud のアートワーク URL（-t500x500 など）のサイズを差し替える */
+const soundcloudArtwork = (url, size) => url?.replace(/-t500x500\.(\w+)$/, `-${size}.$1`)
+
 function embed(c) {
   switch (c.source) {
     case "x":
@@ -69,6 +79,9 @@ function embed(c) {
       // iframe の上ではホイール操作がページに届かずカルーセルを送れないのと、動画が多いと重いため。
       // JavaScript が動かない環境（RSS など）では YouTube へのリンクになる
       return `<a class="digest-youtube-facade no-styling" href="${escapeAttr(c.url)}" data-video-id="${escapeAttr(c.id)}" data-title="${escapeAttr(c.title)}" target="_blank" rel="noopener"><img class="no-lightbox" src="${escapeAttr(thumbnail(c))}" alt="${escapeAttr(c.title)}" loading="lazy"><span class="digest-youtube-title">${escapeText(c.title)}</span><span class="digest-youtube-play" aria-hidden="true"></span>${youtubeViews(c)}</a>`
+    case "soundcloud":
+      // YouTube と同じく、最初はアートワークだけを出し、クリックでプレーヤー（iframe）に差し替える（Layout.astro）
+      return `<a class="digest-soundcloud-facade no-styling" href="${escapeAttr(c.url)}" data-track-id="${escapeAttr(c.id)}" data-title="${escapeAttr(c.title)}" target="_blank" rel="noopener"><img class="digest-soundcloud-bg no-lightbox" src="${escapeAttr(thumbnail(c))}" alt="" aria-hidden="true" loading="lazy"><img class="digest-soundcloud-art no-lightbox" src="${escapeAttr(thumbnail(c))}" alt="${escapeAttr(c.title)}" loading="lazy"><span class="digest-soundcloud-title">${escapeText(c.title)}<span class="digest-soundcloud-author">${escapeText(c.author.name)}</span></span><span class="digest-soundcloud-play" aria-hidden="true"></span>${soundcloudPlays(c)}</a>`
     case "steam":
       return steamCard(c)
     default:
@@ -89,6 +102,7 @@ function thumbnail(c) {
 function tocLabel(c) {
   switch (c.source) {
     case "youtube":
+    case "soundcloud":
       return { label: c.title, meta: c.author.name }
     case "steam": {
       const sale = steamSale(c)
@@ -99,10 +113,11 @@ function tocLabel(c) {
   }
 }
 
-/** 目次に小さく出す画像。YouTube は軽い 320px 版、X は投稿者のアイコン（収集時に取れたときだけ） */
+/** 目次に小さく出す画像。YouTube は軽い 320px 版、SoundCloud は 300px のアートワーク、X は投稿者のアイコン（収集時に取れたときだけ） */
 function tocThumb(c) {
   if (c.source === "youtube") return `https://i.ytimg.com/vi/${c.id}/mqdefault.jpg`
   if (c.source === "x") return c.author.avatar
+  if (c.source === "soundcloud") return soundcloudArtwork(thumbnail(c), "t300x300")
   return thumbnail(c)
 }
 
@@ -170,7 +185,7 @@ ${embed(c)}
 ${body}
 ---
 
-この記事は、X・YouTube・Steam の公開データをもとに AI が掲載候補を選び、筆者が内容を確認したうえで公開しています。掲載した投稿や動画の権利は各投稿者に帰属します。削除や掲載取りやめのご希望は、ブログのお問い合わせ先までご連絡ください。
+この記事は、X・YouTube・SoundCloud・Steam の公開データをもとに AI が掲載候補を選び、筆者が内容を確認したうえで公開しています。掲載した投稿や動画の権利は各投稿者に帰属します。削除や掲載取りやめのご希望は、ブログのお問い合わせ先までご連絡ください。
 `
 }
 

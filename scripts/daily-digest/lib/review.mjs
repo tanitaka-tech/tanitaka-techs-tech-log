@@ -123,6 +123,7 @@ export function formatMetrics(c) {
   const m = c.metrics
   if (c.source === "x") return `♥${fmt(m.like_count)} RT${fmt(m.retweet_count)} 👁${m.impression_count != null ? fmt(m.impression_count) : "-"}`
   if (c.source === "youtube") return `▶${fmt(m.views)} 👍${fmt(m.likes)}${m.sharers ? ` 🔗${m.sharers}人` : ""}`
+  if (c.source === "soundcloud") return `▶${fmt(m.plays)} ♥${fmt(m.likes)}${m.sharers ? ` 🔗${m.sharers}人` : ""}`
   return `-${m.discountPercent}%`
 }
 
