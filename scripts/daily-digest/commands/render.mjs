@@ -61,6 +61,10 @@ export function render(ctx, { force = false, final = false } = {}) {
   for (const [label, n] of perCategory) {
     if (n > categoryLimit(label)) overLimit.push(`${label}: 採用 ${n}件（上限 ${categoryLimit(label)}件）`)
   }
+  // note（注意）を付けた項目は不採用にしておく決まり。採用のままなら、見落としかもしれないので知らせる
+  for (const i of items.filter((i) => i.note && i.adopt !== false)) {
+    warnings.push(`#${numbers[i.key]}: 注意（${i.note}）があるのに採用になっています`)
+  }
   const adopted = items.filter((i) => i.adopt !== false).length
   if (adopted > config.article.maxItems) {
     overLimit.push(`記事全体: 採用 ${adopted}件（上限 ${config.article.maxItems}件）`)

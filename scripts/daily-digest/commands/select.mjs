@@ -1,16 +1,46 @@
 /*
- * LLM の API で候補一覧から掲載項目を選び、selection.json に保存する。
- * 普段は Claude Code（/digest スキル）が会話の中で selection.json を書くので、これは API で済ませたいとき用。
+ * 候補一覧から掲載項目を選び、selection.json に保存する。
+ *   --draft: 候補一覧のすべてを入れた下書きを作る（おすすめは上限に収まるよう機械的に選ぶ）。/digest スキルはこれを使い、
+ *            note・おすすめの入れ替え・タイトル・説明を書き足す。selection.json があれば、まだない候補を足すだけ（--reset で作り直す）
+ *   --llm:   LLM の API で選ぶ（API で済ませたいとき用）
+ *   --mock:  スコア上位を機械的に選ぶ（動作確認用）
  */
+import fs from "node:fs"
 import { readJson, writeJson } from "../lib/context.mjs"
+import { draftSelection } from "../lib/draft.mjs"
 import { mockSelect, selectAndWrite } from "../lib/llm.mjs"
-import { runReview } from "../lib/review.mjs"
+import { resolveKey, runReview } from "../lib/review.mjs"
 
-export async function select(ctx, { llm = false, providers: names, mock = false } = {}) {
+function draft(ctx, { reset }) {
+  const { numbers } = runReview(ctx)
+  const shortlist = readJson(ctx.paths.shortlist)
+  const previous = !reset && fs.existsSync(ctx.paths.selection) ? readJson(ctx.paths.selection) : null
+  const resolve = (k) => {
+    try {
+      return resolveKey(k, numbers)
+    } catch {
+      return k
+    }
+  }
+  const { selection, added } = draftSelection(shortlist, {
+    maxItems: ctx.config.article.maxItems,
+    categoryLimit: ctx.categoryLimit,
+    previous,
+    resolve,
+  })
+  writeJson(ctx.paths.selection, selection)
+  const adopted = selection.items.filter((i) => i.adopt !== false).length
+  console.log(
+    previous
+      ? `${ctx.paths.selection} に、まだなかった候補 ${added}件を不採用で足しました（全 ${selection.items.length}件、採用 ${adopted}件）`
+      : `${ctx.paths.selection} に下書きを作りました（全 ${selection.items.length}件、おすすめ ${adopted}件）。topic・description を書いてから render してください`,
+  )
+}
+
+export async function select(ctx, { llm = false, providers: names, mock = false, draft: isDraft = false, reset = false } = {}) {
+  if (isDraft) return draft(ctx, { reset })
   if (!llm && !mock) {
-    throw new Error(
-      "--llm（API で選ぶ）か --mock（スコア上位を機械的に選ぶ）を指定してください。Claude Code では selection.json を直接書きます",
-    )
+    throw new Error("--draft（候補一覧から下書きを作る）・--llm（API で選ぶ）・--mock（スコア上位を機械的に選ぶ）のどれかを指定してください")
   }
   runReview(ctx)
   const shortlisted = readJson(ctx.paths.shortlist)

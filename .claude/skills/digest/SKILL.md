@@ -35,9 +35,17 @@ pnpm -s digest review --date <date>
 
 - 出力と `.digest-cache/<date>/shortlist.json`（本文・共有者などの詳細）を読む。
 - `scripts/daily-digest/selection-guide.md` の選定基準を読む。
-- `.digest-cache/<date>/selection.json` に、候補一覧（shortlist）の**すべて**を入れる（書き方は 4.）。
-  - おすすめの候補は `"adopt": true`、それ以外は `"adopt": false` にしておく。カテゴリの上限（`config.yaml` の `article`）に収まるように選ぶ。
-  - 基準に引っかかる候補（炎上・懸賞・AIイラスト・性的な内容への言及など）も外さず、`note` に理由を書いて `adopt: false` にする。note はプレビューで項目の上に ⚠️ として表示される。
+- 候補一覧（shortlist）の**すべて**を入れた下書きを作る。おすすめ（`adopt: true`）は、カテゴリと記事全体の上限に収まるよう、step・ジャンルごとにスコア上位から機械的に選ばれる。
+
+```sh
+pnpm -s digest select --draft --date <date>
+```
+
+- 下書きの `.digest-cache/<date>/selection.json` を直す（書き方は 4.）。items を1件ずつ書き直す必要はなく、直すのは次の点だけ。
+  - `topic`・`description` を書く（空のままだと render が止まる）。`topicKey` も見直す。
+  - 基準に引っかかる候補（炎上・懸賞・AIイラスト・性的な内容への言及など）は外さず、`note` に理由を書いて `adopt: false` にする。note はプレビューで項目の上に ⚠️ として表示される。
+  - 機械的なおすすめより良い候補があれば `adopt` を入れ替える。上限を超えないように、入れた分だけ外す。
+- selection.json がすでにあると、`select --draft` は note・adopt・並びを残したまま、まだない候補（ルールを変えて増えた候補など）を不採用で足すだけ。作り直すのはユーザーが頼んだときだけ（`--reset`）。
 - 記事を書き出す。既定はプレビュー用で、先頭に警告の一覧（収集エラー・上限超え・note）が出る。
 
 ```sh
@@ -80,7 +88,7 @@ pnpm -s digest render --date <date>
 - topic と description は `selection-guide.md` の「書き方」に従う。
 - 「タイトルを変えて」「説明を短く」: `topic` / `description` を直して `render` し直す。
 - 項目の採用・不採用の切り替え: ブログのトグルか、`items` の `adopt` を直す（render し直さなくても、公開用に書き直すときに反映される）。
-- 項目の追加: `items` に足して `render` し直す。
+- 項目の追加: `items` に足して `render` し直す。ルールを変えて候補一覧が変わったら `select --draft` で足りない候補を足す。
 - 記事の .md は `render` で上書きされるので、直接は編集しない。
 
 ## 指示を反映する
