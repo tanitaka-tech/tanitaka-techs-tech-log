@@ -1,0 +1,9 @@
+/*
+ * サイト全体のスタイルの入口。
+ * markdown.css などが main.css のクラスを @apply するため、postcss-import で1ファイルにまとめてから Tailwind に渡す
+ */
+@import "./main.css";
+@import "./markdown.css";
+@import "./transition.css";
+@import "./scrollbar.css";
+@import "./photoswipe.css";
