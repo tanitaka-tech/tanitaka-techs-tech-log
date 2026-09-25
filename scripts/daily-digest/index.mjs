@@ -19,6 +19,7 @@ import { mockSelect, selectAndWrite } from "./lib/llm.mjs"
 import { loadUsedKeys, renderArticle } from "./lib/render.mjs"
 import { fetchSteamSales } from "./lib/steam.mjs"
 import { searchXGenre } from "./lib/x.mjs"
+import { collectXYoutubeGenre } from "./lib/x-youtube.mjs"
 import { searchYoutubeGenre } from "./lib/youtube.mjs"
 
 const { values: args } = parseArgs({
@@ -75,16 +76,25 @@ async function collect() {
     return { candidates: JSON.parse(fs.readFileSync(args.fixture, "utf8")), errors: [], xReads: 0 }
   }
   const budget = { remaining: config.x.maxPostsPerRun }
-  // 読み取り上限を先頭のジャンルが使い切らないよう、残りの X ジャンルで均等に分ける
-  let xGenresLeft = config.genres.filter((g) => g.source === "x").length
+  // 読み取り上限を先頭のジャンルが使い切らないよう、残りの X ジャンルで xWeight（既定1）の比で分ける
+  const usesX = (g) => g.source === "x" || g.source === "x-youtube"
+  let xWeightLeft = config.genres.filter(usesX).reduce((sum, g) => sum + (g.xWeight ?? 1), 0)
+  const takeShare = (g) => {
+    const w = g.xWeight ?? 1
+    const share = Math.floor((budget.remaining * w) / xWeightLeft)
+    xWeightLeft -= w
+    return share
+  }
   const candidates = []
   const errors = []
   for (const genre of config.genres) {
     try {
       let found = []
       if (genre.source === "x") {
-        const share = Math.floor(budget.remaining / xGenresLeft--)
-        found = await searchXGenre(genre, window, config, requireEnv("X_BEARER_TOKEN"), budget, now, share)
+        found = await searchXGenre(genre, window, config, requireEnv("X_BEARER_TOKEN"), budget, now, takeShare(genre))
+      } else if (genre.source === "x-youtube") {
+        const keys = { xToken: requireEnv("X_BEARER_TOKEN"), ytKey: requireEnv("YOUTUBE_API_KEY") }
+        found = await collectXYoutubeGenre(genre, window, config, keys, budget, now, takeShare(genre))
       } else if (genre.source === "youtube") {
         found = await searchYoutubeGenre(genre, window, config, requireEnv("YOUTUBE_API_KEY"), now)
       } else if (genre.source === "steam" && config.steam.enabled) {
@@ -140,7 +150,7 @@ function validateSelection(selection, byKey) {
 function formatMetrics(c) {
   const m = c.metrics
   if (c.source === "x") return `♥${m.like_count} RT${m.retweet_count} 👁${m.impression_count ?? "-"}`
-  if (c.source === "youtube") return `▶${m.views} 👍${m.likes}`
+  if (c.source === "youtube") return `▶${m.views} 👍${m.likes}${m.sharers ? ` 🔗${m.sharers}人` : ""}`
   return `-${m.discountPercent}%`
 }
 
