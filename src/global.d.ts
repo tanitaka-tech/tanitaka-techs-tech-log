@@ -13,7 +13,14 @@ declare global {
 			Player: new (
 				el: HTMLIFrameElement,
 				options: { events: { onReady?: () => void; onStateChange: (e: { data: number }) => void } },
-			) => { pauseVideo?: () => void; playVideo?: () => void; setVolume?: (volume: number) => void };
+			) => {
+				pauseVideo?: () => void;
+				playVideo?: () => void;
+				setVolume?: (volume: number) => void;
+				getCurrentTime?: () => number;
+				getDuration?: () => number;
+				seekTo?: (seconds: number, allowSeekAhead: boolean) => void;
+			};
 			PlayerState: { PLAYING: number };
 		};
 		onYouTubeIframeAPIReady?: () => void;
@@ -24,6 +31,9 @@ declare global {
 				pause: () => void;
 				play: () => void;
 				setVolume: (volume: number) => void;
+				getPosition: (callback: (ms: number) => void) => void;
+				getDuration: (callback: (ms: number) => void) => void;
+				seekTo: (ms: number) => void;
 			}) & { Events: { PLAY: string; PAUSE: string; FINISH: string; READY: string } };
 		};
 		pagefind: {

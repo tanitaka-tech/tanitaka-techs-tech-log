@@ -610,6 +610,58 @@
     font-size: 0.8rem
     font-weight: bold
 
+  // 目次の再生バー（一度再生した項目だけ。クリック・ドラッグで再生位置を動かす）
+  [role=tab]:has(.digest-toc-progress.visible)
+    position: relative
+    padding-bottom: 1rem
+
+  .digest-toc-progress
+    display: none
+    position: absolute
+    left: 0.625rem
+    right: 0.625rem
+    bottom: 0.25rem
+    height: 0.75rem
+    cursor: pointer
+    touch-action: none
+
+    &.visible
+      display: block
+
+    // 見た目は細い線、押せる範囲は広め
+    &::before
+      content: ""
+      position: absolute
+      left: 0
+      right: 0
+      top: 50%
+      height: 4px
+      margin-top: -2px
+      border-radius: 999px
+      background: var(--btn-regular-bg-active)
+
+    .digest-toc-progress-fill
+      position: absolute
+      left: 0
+      top: 50%
+      width: 0
+      height: 4px
+      margin-top: -2px
+      border-radius: 999px
+      background: var(--primary)
+      pointer-events: none
+
+      // つまみ
+      &::after
+        content: ""
+        position: absolute
+        right: -5px
+        top: -3px
+        width: 10px
+        height: 10px
+        border-radius: 999px
+        background: var(--primary)
+
   // 目次の再生・停止ボタン（動画・曲の項目）
   .digest-toc-play
     display: flex

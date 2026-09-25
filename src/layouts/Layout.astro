@@ -743,8 +743,89 @@ function updatePlayButtons() {
 		button.textContent = playing ? "⏸" : "▶"
 		button.setAttribute("aria-label", playing ? "停止" : "再生")
 	}
+	// 停止したときも、止まった位置で再生バーを表示しておく
+	updateProgressBars()
 }
 const playButtonEntries = new WeakMap<HTMLElement, HTMLElement>()
+
+const formatTime = (seconds: number) => {
+	const s = Math.max(0, Math.floor(seconds))
+	return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`
+}
+
+/**
+ * 目次の再生バー。一度再生した項目にだけ出し、再生位置に合わせて伸ばす。
+ * クリック・ドラッグで再生位置を動かせる（ドラッグ中は表示だけを動かし、離したところへ移動する）
+ */
+function createProgressBar(entry: HTMLElement, tab: HTMLElement) {
+	const bar = document.createElement("span")
+	bar.className = "digest-toc-progress"
+	bar.setAttribute("role", "slider")
+	bar.setAttribute("aria-label", "再生位置")
+	bar.tabIndex = -1
+	const fill = document.createElement("span")
+	fill.className = "digest-toc-progress-fill"
+	bar.append(fill)
+	progressBars.set(bar, { entry, duration: 0, seeking: false })
+	const state = progressBars.get(bar)
+	if (!state) return bar
+	const ratioAt = (clientX: number) => {
+		const r = bar.getBoundingClientRect()
+		return Math.max(0, Math.min(1, (clientX - r.left) / r.width))
+	}
+	const player = () => mediaPlayers.find((p) => entry.contains(p.frame))
+	bar.addEventListener("pointerdown", (e) => {
+		e.stopPropagation()
+		e.preventDefault()
+		// 目次の項目はドラッグで並べ替えられるので、再生バーを動かしている間はそれを止める
+		tab.draggable = false
+		state.seeking = true
+		bar.setPointerCapture(e.pointerId)
+		fill.style.width = `${ratioAt(e.clientX) * 100}%`
+	})
+	bar.addEventListener("pointermove", (e) => {
+		if (!state.seeking) return
+		fill.style.width = `${ratioAt(e.clientX) * 100}%`
+		bar.title = formatTime(ratioAt(e.clientX) * state.duration)
+	})
+	const end = (e: PointerEvent) => {
+		if (!state.seeking) return
+		state.seeking = false
+		tab.draggable = tab.dataset.reorderable === "true"
+		const p = player()
+		if (p && state.duration > 0) p.seek(ratioAt(e.clientX) * state.duration)
+	}
+	bar.addEventListener("pointerup", end)
+	bar.addEventListener("pointercancel", () => {
+		state.seeking = false
+		tab.draggable = tab.dataset.reorderable === "true"
+	})
+	// 目次の項目の選択（click）に伝わらないようにする
+	bar.addEventListener("click", (e) => e.stopPropagation())
+	return bar
+}
+const progressBars = new WeakMap<HTMLElement, { entry: HTMLElement; duration: number; seeking: boolean }>()
+
+/** 目次の再生バーを、各プレーヤーの再生位置に合わせる（再生中のものがある間だけ定期的に呼ぶ） */
+async function updateProgressBars() {
+	for (const bar of document.querySelectorAll<HTMLElement>(".digest-toc-progress")) {
+		const state = progressBars.get(bar)
+		if (!state) continue
+		const player = mediaPlayers.find((p) => state.entry.contains(p.frame))
+		bar.classList.toggle("visible", !!player?.started)
+		if (!player?.started || state.seeking) continue
+		const { position, duration } = await player.progress()
+		state.duration = duration
+		const fill = bar.firstElementChild as HTMLElement
+		fill.style.width = duration > 0 ? `${(position / duration) * 100}%` : "0%"
+		bar.title = `${formatTime(position)} / ${formatTime(duration)}`
+		bar.setAttribute("aria-valuenow", String(Math.round(position)))
+		bar.setAttribute("aria-valuemax", String(Math.round(duration)))
+	}
+}
+setInterval(() => {
+	if (mediaPlayers.some((p) => p.playing)) updateProgressBars()
+}, 500)
 
 /** 項目の動画・曲を再生・停止する。まだプレーヤーになっていなければ、サムネイルを押したのと同じく読み込んで再生する */
 function togglePlay(entry: HTMLElement) {
@@ -868,7 +949,7 @@ function setupDigestLists() {
 				play.addEventListener("keydown", (e) => {
 					if (e.key === "Enter" || e.key === " ") onPlay(e)
 				})
-				tab.append(play)
+				tab.append(play, createProgressBar(entry, tab))
 			}
 			entry.setAttribute("role", "tabpanel")
 			toc.append(tab)
@@ -1070,9 +1151,14 @@ function setupDigestLists() {
 type MediaPlayer = {
 	frame: HTMLIFrameElement
 	playing: boolean
+	/** 一度でも再生したか（目次の再生バーを出すかどうか） */
+	started: boolean
 	play: () => void
 	pause: () => void
 	setVolume: (volume: number) => void
+	/** 再生位置と長さ（秒） */
+	progress: () => Promise<{ position: number; duration: number }>
+	seek: (seconds: number) => void
 }
 let mediaPlayers: MediaPlayer[] = []
 const pauseOthers = (frame?: HTMLIFrameElement) => {
@@ -1158,9 +1244,12 @@ function setupYoutube() {
 				const entry: MediaPlayer = {
 					frame: iframe,
 					playing: false,
+					started: false,
 					play: () => player.playVideo?.(),
 					pause: () => player.pauseVideo?.(),
 					setVolume: (v) => player.setVolume?.(v),
+					progress: async () => ({ position: player.getCurrentTime?.() ?? 0, duration: player.getDuration?.() ?? 0 }),
+					seek: (seconds) => player.seekTo?.(seconds, true),
 				}
 				const player = new YT.Player(iframe, {
 					events: {
@@ -1169,6 +1258,7 @@ function setupYoutube() {
 							// 目次の再生ボタンの表示に使う
 							// 読み込み中（3: BUFFERING）も再生中として扱い、ボタンの表示がちらつかないようにする
 							entry.playing = event.data === YT.PlayerState.PLAYING || event.data === 3
+							if (entry.playing) entry.started = true
 							updatePlayButtons()
 							if (entry.playing) pauseOthers(iframe)
 						},
@@ -1219,6 +1309,12 @@ function mountSoundcloud(facade: HTMLAnchorElement, autoPlay: boolean) {
 		const entry: MediaPlayer = {
 			frame: iframe,
 			playing: false,
+			started: false,
+			progress: () =>
+				new Promise((resolve) =>
+					widget.getPosition((pos) => widget.getDuration((dur) => resolve({ position: pos / 1000, duration: dur / 1000 }))),
+				),
+			seek: (seconds) => widget.seekTo(seconds * 1000),
 			play: () => {
 				if (ready) widget.play()
 				else playWhenReady = true
@@ -1231,6 +1327,7 @@ function mountSoundcloud(facade: HTMLAnchorElement, autoPlay: boolean) {
 		}
 		const setPlaying = (playing: boolean) => {
 			entry.playing = playing
+			if (playing) entry.started = true
 			updatePlayButtons()
 		}
 		widget.bind(SC.Widget.Events.READY, () => {
@@ -1331,6 +1428,36 @@ async function setupDigestReview() {
 			counter.classList.toggle("over", n > limit)
 		}
 
+		// ドラッグ中に目次の上端・下端へ近づけたら、目次をその方向へスクロールする
+		const viewport = list ? list.tabOf(entries[0])?.parentElement : undefined
+		if (viewport) {
+			let edge = 0
+			let frame = 0
+			const EDGE_PX = 48
+			const step = () => {
+				if (!dragging || edge === 0) {
+					frame = 0
+					return
+				}
+				viewport.scrollTop += edge * 12
+				frame = requestAnimationFrame(step)
+			}
+			viewport.addEventListener("dragover", (e) => {
+				if (!dragging || !entries.includes(dragging)) return
+				const r = viewport.getBoundingClientRect()
+				edge = e.clientY < r.top + EDGE_PX ? -1 : e.clientY > r.bottom - EDGE_PX ? 1 : 0
+				if (edge !== 0 && !frame) frame = requestAnimationFrame(step)
+			})
+			const stop = () => {
+				edge = 0
+			}
+			viewport.addEventListener("dragleave", (e) => {
+				if (!viewport.contains(e.relatedTarget as Node | null)) stop()
+			})
+			viewport.addEventListener("drop", stop)
+			document.addEventListener("dragend", stop)
+		}
+
 		for (const entry of entries) {
 			const tab = list?.tabOf(entry)
 			const key = keyOf(entry)
@@ -1368,6 +1495,8 @@ async function setupDigestReview() {
 			// 目次の項目のドラッグで並べ替える
 			if (!tab || !list) continue
 			tab.draggable = true
+			// 再生バーを動かしている間はドラッグを止め、終わったら戻すための印
+			tab.dataset.reorderable = "true"
 			tab.addEventListener("dragstart", (e) => {
 				dragging = entry
 				e.dataTransfer?.setData("text/plain", key)
