@@ -20,7 +20,8 @@ export async function fetchSteamSales(genre, config) {
       id: String(i.id),
       genre: genre.id,
       genreLabel: genre.label,
-      url: `https://store.steampowered.com/app/${i.id}/`,
+      // type 1 は同梱版などのパッケージ（sub）で、ストアの URL が違う
+      url: `https://store.steampowered.com/${i.type === 1 ? "sub" : "app"}/${i.id}/`,
       title: i.name,
       thumbnail: i.header_image,
       text: `${i.name} が ${i.discount_percent}%オフ（¥${Math.round(i.original_price / 100)} → ¥${Math.round(i.final_price / 100)}）${

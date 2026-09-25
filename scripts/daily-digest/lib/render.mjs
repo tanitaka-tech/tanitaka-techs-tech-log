@@ -50,6 +50,15 @@ function steamCard(c) {
   return `<a class="digest-steam-card no-styling" href="${escapeAttr(c.url)}" target="_blank" rel="noopener"><img class="no-lightbox" src="${escapeAttr(thumbnail(c))}" alt="${escapeAttr(c.title)}" loading="lazy"><span class="digest-steam-body"><span class="digest-steam-title">${escapeText(c.title)}</span>${price}${until}</span></a>`
 }
 
+const compactNumber = new Intl.NumberFormat("ja-JP", { notation: "compact", maximumFractionDigits: 1 })
+
+/** YouTube のサムネイル右下に出す再生数（収集時点） */
+function youtubeViews(c) {
+  const views = c.metrics?.views
+  if (views == null) return ""
+  return `<span class="digest-youtube-views" title="収集時点の再生数">${compactNumber.format(views)}回視聴</span>`
+}
+
 function embed(c) {
   switch (c.source) {
     case "x":
@@ -59,7 +68,7 @@ function embed(c) {
       // 最初はサムネイルだけを出し、クリックでプレーヤー（iframe）に差し替える（Layout.astro）。
       // iframe の上ではホイール操作がページに届かずカルーセルを送れないのと、動画が多いと重いため。
       // JavaScript が動かない環境（RSS など）では YouTube へのリンクになる
-      return `<a class="digest-youtube-facade no-styling" href="${escapeAttr(c.url)}" data-video-id="${escapeAttr(c.id)}" data-title="${escapeAttr(c.title)}" target="_blank" rel="noopener"><img class="no-lightbox" src="${escapeAttr(thumbnail(c))}" alt="${escapeAttr(c.title)}" loading="lazy"><span class="digest-youtube-title">${escapeText(c.title)}</span><span class="digest-youtube-play" aria-hidden="true"></span></a>`
+      return `<a class="digest-youtube-facade no-styling" href="${escapeAttr(c.url)}" data-video-id="${escapeAttr(c.id)}" data-title="${escapeAttr(c.title)}" target="_blank" rel="noopener"><img class="no-lightbox" src="${escapeAttr(thumbnail(c))}" alt="${escapeAttr(c.title)}" loading="lazy"><span class="digest-youtube-title">${escapeText(c.title)}</span><span class="digest-youtube-play" aria-hidden="true"></span>${youtubeViews(c)}</a>`
     case "steam":
       return steamCard(c)
     default:
@@ -90,12 +99,11 @@ function tocLabel(c) {
   }
 }
 
-/** 目次に出す数値（収集時点）。YouTube は再生数、X はいいね数とリポスト数 */
-function statsAttrs(c) {
-  const m = c.metrics ?? {}
-  if (c.source === "youtube" && m.views != null) return ` data-views="${m.views}"`
-  if (c.source === "x") return ` data-likes="${m.like_count ?? 0}" data-reposts="${m.retweet_count ?? 0}"`
-  return ""
+/** 目次に小さく出す画像。YouTube は軽い 320px 版、X は投稿者のアイコン（収集時に取れたときだけ） */
+function tocThumb(c) {
+  if (c.source === "youtube") return `https://i.ytimg.com/vi/${c.id}/mqdefault.jpg`
+  if (c.source === "x") return c.author.avatar
+  return thumbnail(c)
 }
 
 /**
@@ -144,7 +152,7 @@ export function renderArticle({ date, selection, candidatesByKey, category, fixe
 ${list
   .map(
     ({ c }) => `<!-- digest-item ${c.source}:${c.id} -->
-<div class="digest-entry digest-entry-${c.source}" data-label="${escapeAttr(tocLabel(c).label)}" data-meta="${escapeAttr(tocLabel(c).meta)}"${statsAttrs(c)}${c.step ? ` data-step="${escapeAttr(c.step)}"` : ""}>
+<div class="digest-entry digest-entry-${c.source}" data-label="${escapeAttr(tocLabel(c).label)}" data-meta="${escapeAttr(tocLabel(c).meta)}"${tocThumb(c) ? ` data-thumb="${escapeAttr(tocThumb(c))}"` : ""}${c.step ? ` data-step="${escapeAttr(c.step)}"` : ""}>
 ${embed(c)}
 </div>
 <!-- /digest-item -->
