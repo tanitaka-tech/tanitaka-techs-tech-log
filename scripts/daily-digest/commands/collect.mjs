@@ -1,11 +1,12 @@
 /*
- * X・YouTube・Steam から、実行時点までの直近24時間（config.yaml の collect.windowHours）の候補を集めて
+ * X・YouTube・SoundCloud・Steam から、実行時点までの直近24時間（config.yaml の collect.windowHours）の候補を集めて
  * .digest-cache/<date>/candidates.json に保存する。<date> は記事の日付（既定は今日）。
  * X は従量課金なので、保存済みなら --force を付けない限り取り直さない。
  */
 import fs from "node:fs"
 import { writeJson } from "../lib/context.mjs"
 import { recentWindow, todayJst } from "../lib/date.mjs"
+import { collectXSoundcloudGenre } from "../lib/soundcloud.mjs"
 import { fetchSteamSales } from "../lib/steam.mjs"
 import { searchXGenre } from "../lib/x.mjs"
 import { collectXYoutubeGenre } from "../lib/x-youtube.mjs"
@@ -22,7 +23,7 @@ async function fetchAll(ctx) {
   const window = recentWindow(now, config.collect?.windowHours ?? 24)
   const budget = { remaining: config.x.maxPostsPerRun }
   // 読み取り上限を先頭のジャンルが使い切らないよう、残りの X ジャンルで xWeight（既定1）の比で分ける
-  const usesX = (g) => g.source === "x" || g.source === "x-youtube"
+  const usesX = (g) => ["x", "x-youtube", "x-soundcloud"].includes(g.source)
   let xWeightLeft = config.genres.filter(usesX).reduce((sum, g) => sum + (g.xWeight ?? 1), 0)
   const takeShare = (g) => {
     const w = g.xWeight ?? 1
@@ -40,6 +41,8 @@ async function fetchAll(ctx) {
       } else if (genre.source === "x-youtube") {
         const keys = { xToken: requireEnv("X_BEARER_TOKEN"), ytKey: requireEnv("YOUTUBE_API_KEY") }
         found = await collectXYoutubeGenre(genre, window, config, keys, budget, now, takeShare(genre))
+      } else if (genre.source === "x-soundcloud") {
+        found = await collectXSoundcloudGenre(genre, window, config, requireEnv("X_BEARER_TOKEN"), budget, now, takeShare(genre))
       } else if (genre.source === "youtube") {
         found = await searchYoutubeGenre(genre, window, config, requireEnv("YOUTUBE_API_KEY"), now)
       } else if (genre.source === "steam" && config.steam.enabled) {

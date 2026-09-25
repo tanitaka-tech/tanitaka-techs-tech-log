@@ -69,7 +69,7 @@ steam:
 # genres に step を書くと、同じカテゴリのカルーセルの中を step ごとに区切って表示する（上部に区切りの切り替えが出る）。
 # step の表示順は genres に最初に出てくる順で、step の中はスコア順。
 # 並び順 = X の読み取り上限が足りないときの優先順（記事内の表示順は article.categoryOrder）。
-# 上限は X ジャンル（source: x / x-youtube）で xWeight（既定1）の比で分けるが、1ジャンルあたり10件未満になると後ろから順にスキップされる。
+# 上限は X ジャンル（source: x / x-youtube / x-soundcloud）で xWeight（既定1）の比で分けるが、1ジャンルあたり10件未満になると後ろから順にスキップされる。
 # （YouTube・Steam は上限を消費しないので位置は関係ない。sale は Steam で補えるので X の中では最後）
 genres:
   # X で共有された YouTube 動画を「共有したアカウント数」で並べる。再生数の多い海外コンテンツより、
@@ -94,6 +94,17 @@ genres:
     maxReads: 200
     minSharers: 1
     maxVideoAgeDays: 7
+
+  # X で共有された SoundCloud の曲。曲の情報は曲ページの埋め込みデータから読む（API キー不要）。
+  # SoundCloud はローマ字名の日本人クリエイターが多いので、仮名フィルタ（requireKana）は既定で掛けない
+  - id: x-soundcloud
+    label: 音楽・MV
+    step: SoundCloud
+    source: x-soundcloud
+    query: 'url:soundcloud.com (新曲 OR ボカロ OR 初音ミク OR 重音テト OR 可不 OR remix OR リミックス OR オリジナル曲 OR 歌ってみた OR フリーダウンロード OR "Free DL")'
+    maxReads: 100
+    minSharers: 1
+    maxTrackAgeDays: 7 # 共有は当日でも、曲の公開がこれより古いものは除く
 
   - id: ai
     label: 最新AI技術

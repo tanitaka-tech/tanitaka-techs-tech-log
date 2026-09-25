@@ -35,7 +35,7 @@ function bestThumbnail(t = {}) {
 }
 
 // ひらがな・カタカナ（長音符を含む）。漢字だけだと中国語圏の動画も通ってしまうので仮名で判定する
-const KANA_RE = /[\u3041-\u309f\u30a1-\u30ff]/
+export const KANA_RE = /[\u3041-\u309f\u30a1-\u30ff]/
 
 /** タイトルかチャンネル名に仮名が入っているか。海外の大型コンテンツを除いて日本の動画に寄せるため */
 export function hasKana(v) {
