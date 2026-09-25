@@ -40,6 +40,9 @@ jobs:
       - name: Run Astro Check
         run: pnpm astro check
 
+      - name: Test daily digest scripts
+        run: pnpm test:digest
+
   build:
     strategy:
       matrix:
