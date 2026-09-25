@@ -71,7 +71,7 @@ const soundcloudArtwork = (url, size) => url?.replace(/-t500x500\.(\w+)$/, `-${s
 
 /** はてなブックマークの記事のリンクカード（はてなのエントリー画像・タイトル・サイト名・ブックマーク数） */
 function hatenaCard(c) {
-  return `<a class="digest-link-card no-styling" href="${escapeAttr(c.url)}" target="_blank" rel="noopener"><img class="no-lightbox" src="${escapeAttr(thumbnail(c))}" alt="" loading="lazy"><span class="digest-link-body"><span class="digest-link-title">${escapeText(c.title)}</span><span class="digest-link-meta">${escapeText(c.author.name)} · はてなブックマーク ${c.metrics?.bookmarks ?? 0}users</span></span></a>`
+  return `<a class="digest-link-card no-styling" href="${escapeAttr(c.url)}" target="_blank" rel="noopener"><img class="no-lightbox" src="${escapeAttr(thumbnail(c))}" alt="" loading="lazy"><span class="digest-link-body"><span class="digest-link-title">${escapeText(c.title)}</span><span class="digest-link-meta">${escapeText(c.author.name)}${c.metrics?.bookmarks ? ` · はてなブックマーク ${c.metrics.bookmarks}users` : ""}</span></span></a>`
 }
 
 /**
@@ -82,10 +82,11 @@ function hatenaCard(c) {
 const stripEmoji = (s) => (s ?? "").replace(/:[a-z0-9_+-]+:/gi, "").replace(/[ \t]{2,}/g, " ").trim()
 
 function misskeyCard(c) {
-  const images = (c.images ?? [])
-    .map((src) => `<img class="no-lightbox" src="${escapeAttr(src)}" alt="" loading="lazy">`)
-    .join("")
-  return `<a class="digest-misskey-card no-styling" href="${escapeAttr(c.url)}" target="_blank" rel="noopener"><span class="digest-misskey-author">${c.author.avatar ? `<img class="no-lightbox" src="${escapeAttr(c.author.avatar)}" alt="" loading="lazy">` : ""}<span><strong>${escapeText(stripEmoji(c.author.name) || c.author.handle)}</strong> @${escapeText(c.author.handle)}</span></span>${stripEmoji(c.text) ? `<span class="digest-misskey-text">${escapeText(stripEmoji(c.text))}</span>` : ""}${images ? `<span class="digest-misskey-images n${Math.min(c.images.length, 4)}">${images}</span>` : ""}<span class="digest-misskey-meta">リアクション ${c.metrics?.reactions ?? 0} · リノート ${c.metrics?.renotes ?? 0} · ${escapeText(c.host ?? "misskey.io")}</span></a>`
+  // 画像はリンクにせず、クリックでその場で拡大表示する（記事の画像と同じライトボックス）。全体が見えるよう切り抜かない
+  const images = (c.images ?? []).map((src) => `<img src="${escapeAttr(src)}" alt="" loading="lazy">`).join("")
+  const author = `<a class="digest-misskey-author no-styling" href="${escapeAttr(c.url)}" target="_blank" rel="noopener">${c.author.avatar ? `<img class="no-lightbox" src="${escapeAttr(c.author.avatar)}" alt="" loading="lazy">` : ""}<span><strong>${escapeText(stripEmoji(c.author.name) || c.author.handle)}</strong> @${escapeText(c.author.handle)}</span></a>`
+  const text = stripEmoji(c.text) ? `<p class="digest-misskey-text">${escapeText(stripEmoji(c.text))}</p>` : ""
+  return `<div class="digest-misskey-card">${author}${text}${images ? `<div class="digest-misskey-images n${Math.min(c.images.length, 4)}">${images}</div>` : ""}<a class="digest-misskey-meta no-styling" href="${escapeAttr(c.url)}" target="_blank" rel="noopener">リアクション ${c.metrics?.reactions ?? 0} · リノート ${c.metrics?.renotes ?? 0} · ${escapeText(c.host ?? "misskey.io")} で見る</a></div>`
 }
 
 function embed(c) {
@@ -151,11 +152,11 @@ function tocThumb(c) {
 }
 
 /** プレビューの記事の先頭に出す警告の一覧。公開する記事には出さない */
-function reviewBanner(warnings) {
+function reviewBanner(warnings, date) {
   const list = warnings.length
     ? `<ul>${warnings.map((w) => `<li>${escapeText(w)}</li>`).join("")}</ul>`
     : "<p>警告はありません。</p>"
-  return `<div class="digest-review-banner"><p><strong>⚠️ プレビュー用の表示です。</strong>公開する記事（render --final / publish）には出ません。</p>${list}</div>\n\n`
+  return `<div class="digest-review-banner" data-date="${escapeAttr(date)}"><p><strong>⚠️ プレビュー用の表示です。</strong>公開する記事（render --final / publish）には出ません。項目ごとの「採用」を切り替えると、selection.json に保存されます（pnpm dev のときだけ）。</p>${list}</div>\n\n`
 }
 
 /** ニュース1件（ネットで話題になっている出来事の概要）。出典へのリンクを必ず付ける */
@@ -203,7 +204,17 @@ ${note}${newsCard(n)}
  * 「固定の見出し + 目次付きの項目一覧」として並べる（目次と切り替えは Layout.astro が付ける）。
  * review（警告の配列）を渡すとプレビュー用になり、先頭に警告の一覧、項目に注意（note）を表示する。
  */
-export function renderArticle({ date, selection, candidatesByKey, category, fixedTags, categoryOrder, stepOrder = [], review = null }) {
+export function renderArticle({
+  date,
+  selection,
+  candidatesByKey,
+  category,
+  fixedTags,
+  categoryOrder,
+  stepOrder = [],
+  review = null,
+  categoryLimit = () => Number.POSITIVE_INFINITY,
+}) {
   const items = selection.items.map((i) => ({ ...i, c: candidatesByKey.get(i.key) }))
   const groups = new Map()
   for (const label of categoryOrder) groups.set(label, [])
@@ -241,15 +252,15 @@ export function renderArticle({ date, selection, candidatesByKey, category, fixe
       ([label, list]) => `<!-- digest-section -->
 ## ${escapeText(label)}
 
-<div class="digest-items">
+<div class="digest-items"${review ? ` data-limit="${categoryLimit(label)}"` : ""}>
 ${list
-  .map(({ c, note }) => {
+  .map(({ c, note, adopt }) => {
     // プレビューでは注意のある項目に印を付け、目次でも分かるようにする
     const notes = review && note ? [note] : []
     const meta = `${notes.length ? "⚠️ " : ""}${tocLabel(c).meta}`
     const noteHtml = notes.length ? `<p class="digest-review-note">⚠️ ${escapeText(notes.join(" / "))}</p>\n` : ""
     return `<!-- digest-item ${c.source}:${c.id} -->
-<div class="digest-entry digest-entry-${c.source}" data-label="${escapeAttr(tocLabel(c).label)}" data-meta="${escapeAttr(meta)}"${tocThumb(c) ? ` data-thumb="${escapeAttr(tocThumb(c))}"` : ""}${c.step ? ` data-step="${escapeAttr(c.step)}"` : ""}>
+<div class="digest-entry digest-entry-${c.source}"${review ? ` data-key="${escapeAttr(c.key)}" data-adopt="${adopt !== false}"` : ""} data-label="${escapeAttr(tocLabel(c).label)}" data-meta="${escapeAttr(meta)}"${tocThumb(c) ? ` data-thumb="${escapeAttr(tocThumb(c))}"` : ""}${c.step ? ` data-step="${escapeAttr(c.step)}"` : ""}>
 ${noteHtml}${embed(c)}
 </div>
 <!-- /digest-item -->
@@ -264,7 +275,7 @@ ${noteHtml}${embed(c)}
 
   return `${frontmatter}
 
-${review ? reviewBanner(review) : ""}${body}
+${review ? reviewBanner(review, date) : ""}${body}
 ${newsSection(selection.news, review)}
 ---
 

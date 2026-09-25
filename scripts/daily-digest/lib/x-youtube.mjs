@@ -10,7 +10,7 @@
 import { hoursBetween } from "./date.mjs"
 import { filterWithReasons } from "./drops.mjs"
 import { xGet } from "./x.mjs"
-import { excludeShortsAndStreams, fetchVideos, hasKana, isEmbeddable, toYoutubeCandidate, youtubeVideoId } from "./youtube.mjs"
+import { excludeShortsAndStreams, fetchVideos, hasKana, isEmbeddable, titleAllowed, toYoutubeCandidate, youtubeVideoId } from "./youtube.mjs"
 
 const TWEET_PARAMS = {
   "tweet.fields": "created_at,public_metrics,author_id,entities,possibly_sensitive",
@@ -150,6 +150,7 @@ export async function collectXYoutubeGenre(genre, window, config, { xToken, ytKe
     await fetchVideos(ids, ytKey),
     [
       ["埋め込み不可", isEmbeddable],
+      ["除外するタイトル", (v) => titleAllowed(v, genre, config.youtube)],
       ["仮名なし", (v) => !requireKana || hasKana(v)],
       ["古い動画", (v) => hoursBetween(new Date(v.snippet.publishedAt), now) <= maxAgeDays * 24],
     ],
