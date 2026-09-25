@@ -400,6 +400,19 @@
     .digest-dot[data-distance="5"]::before
       transform: scale(0.5)
 
+      // ニュースは画像がないので、アイコンで埋める
+      &.news
+        width: 2.25rem
+        aspect-ratio: 1
+
+        &:empty::before
+          content: "📰"
+          display: flex
+          align-items: center
+          justify-content: center
+          height: 100%
+          font-size: 1.1rem
+
       // SoundCloud のアートワークは正方形
       &.soundcloud
         width: 2.25rem
@@ -612,6 +625,60 @@
       line-height: 1.4
       color: #fff
       background: rgba(0, 0, 0, 0.7)
+
+  // 記事末尾の「ネットで話題のニュース」の1件
+  .digest-news-card
+    width: 100%
+    padding: 1rem 1.25rem
+    border-radius: 0.75rem
+    background: var(--card-bg)
+
+    p
+      margin: 0 0 0.75rem
+
+    .digest-news-title
+      font-size: 1.1rem
+      font-weight: bold
+
+    .digest-news-sources-label
+      margin-bottom: 0.25rem
+      font-size: 0.8rem
+      font-weight: bold
+      opacity: 0.7
+
+    .digest-news-sources
+      margin: 0 0 0.75rem
+      font-size: 0.875rem
+
+    .digest-news-disclaimer
+      margin: 0
+      font-size: 0.75rem
+      opacity: 0.6
+
+  // プレビュー用の警告（render の既定。公開する記事には出ない）
+  .digest-review-banner
+    margin: 1rem 0
+    padding: 0.75rem 1rem
+    border: 2px solid #e0a000
+    border-radius: 0.75rem
+    background: rgba(255, 200, 0, 0.12)
+    font-size: 0.875rem
+
+    p, ul
+      margin: 0.25rem 0
+
+  .digest-entry:has(.digest-review-note)
+    flex-direction: column
+    align-items: center
+
+  .digest-review-note
+    width: 100%
+    margin: 0 0 0.5rem !important
+    padding: 0.4rem 0.75rem
+    border-radius: 0.5rem
+    background: rgba(255, 200, 0, 0.18)
+    font-size: 0.8rem
+    font-weight: bold
 
   // Steam のセール情報カード（公式ウィジェットの代わり）
   a.digest-steam-card

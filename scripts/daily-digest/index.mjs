@@ -5,7 +5,7 @@
  *   pnpm digest review  [--date] [--all]
  *   pnpm digest curate  <block|weight|pin|ignore-sharer|unset|list> <対象> [倍率] --reason 理由 [--until YYYY-MM-DD] [--genre ID]
  *   pnpm digest select  [--date] (--llm [--providers anthropic,openai] | --mock)
- *   pnpm digest render  [--date] [--force]
+ *   pnpm digest render  [--date] [--force] [--final]
  *   pnpm digest publish [--date] [--skip-build] [--no-merge]
  *
  * 環境変数（.env から読む）: X_BEARER_TOKEN, YOUTUBE_API_KEY。select --llm を使うときは
@@ -28,7 +28,7 @@ const HELP = `使い方: pnpm digest <コマンド> [--date YYYY-MM-DD]
   review    curation.yaml を適用した候補一覧を番号付きで表示する（--all で除外・圏外も）
   curate    ルールを足す・消す（例: curate block author:#3 --reason 懸賞アカウント）
   select    API の LLM（--llm）かスコア上位（--mock）で selection.json を作る
-  render    selection.json から記事を書き出す
+  render    selection.json から記事を書き出す（既定はプレビュー用で警告を表示。--final で公開用）
   publish   記事と curation.yaml をコミットし、PR を作って CI が通ったらマージする`
 
 const OPTIONS = {
@@ -47,6 +47,8 @@ const OPTIONS = {
   llm: { type: "boolean", default: false },
   providers: { type: "string" },
   mock: { type: "boolean", default: false },
+  // render
+  final: { type: "boolean", default: false },
   // publish
   "skip-build": { type: "boolean", default: false },
   "no-merge": { type: "boolean", default: false },
@@ -73,7 +75,7 @@ async function main() {
     case "select":
       return select(ctx, { llm: opts.llm, providers: opts.providers, mock: opts.mock })
     case "render":
-      return render(ctx, { force: opts.force })
+      return render(ctx, { force: opts.force, final: opts.final })
     case "publish":
       return publish(ctx, { skipBuild: opts["skip-build"], noMerge: opts["no-merge"] })
     default:
