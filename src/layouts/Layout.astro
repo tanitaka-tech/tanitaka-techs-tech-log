@@ -1138,31 +1138,92 @@ function withSoundcloudApi(callback: () => void) {
 	script.addEventListener("load", callback, { once: true })
 }
 
+// SoundCloud の音量（0〜100）。プレーヤーに音量の操作がないので自前で付け、全曲で共有して覚えておく
+const SOUNDCLOUD_VOLUME_KEY = "digest-soundcloud-volume"
+let soundcloudWidgets: { setVolume: (volume: number) => void; input: HTMLInputElement }[] = []
+
+function soundcloudVolume() {
+	try {
+		const v = Number(localStorage.getItem(SOUNDCLOUD_VOLUME_KEY))
+		return Number.isFinite(v) && localStorage.getItem(SOUNDCLOUD_VOLUME_KEY) !== null ? v : 60
+	} catch {
+		return 60
+	}
+}
+
+function setSoundcloudVolume(volume: number) {
+	try {
+		localStorage.setItem(SOUNDCLOUD_VOLUME_KEY, String(volume))
+	} catch {}
+	for (const w of soundcloudWidgets) {
+		w.setVolume(volume)
+		w.input.value = String(volume)
+	}
+}
+
+/**
+ * アートワーク（ファサード）を SoundCloud のプレーヤーに差し替え、下に音量の操作を付ける。
+ * autoPlay はクリックで差し替えたとき（読み込みが済む前に押されたとき）だけ
+ */
+function mountSoundcloud(facade: HTMLAnchorElement, autoPlay: boolean) {
+	if (!facade.isConnected) return
+	const player = document.createElement("div")
+	player.className = "digest-soundcloud-player"
+	const iframe = document.createElement("iframe")
+	iframe.className = "digest-soundcloud"
+	const track = encodeURIComponent(`https://api.soundcloud.com/tracks/${facade.dataset.trackId}`)
+	iframe.src = `https://w.soundcloud.com/player/?url=${track}&auto_play=${autoPlay}&visual=true&show_comments=false&show_reposts=false`
+	iframe.title = facade.dataset.title ?? ""
+	iframe.allow = "autoplay; encrypted-media"
+	const volume = document.createElement("label")
+	volume.className = "digest-soundcloud-volume"
+	volume.innerHTML = '<span aria-hidden="true">🔊</span><span class="sr-only">音量</span>'
+	const input = document.createElement("input")
+	input.type = "range"
+	input.min = "0"
+	input.max = "100"
+	input.value = String(soundcloudVolume())
+	volume.append(input)
+	player.append(iframe, volume)
+	facade.replaceWith(player)
+	if (autoPlay) pauseOthers()
+	withSoundcloudApi(() => {
+		const SC = window.SC
+		if (!SC) return
+		const widget = SC.Widget(iframe)
+		widget.bind(SC.Widget.Events.READY, () => widget.setVolume(soundcloudVolume()))
+		widget.bind(SC.Widget.Events.PLAY, () => pauseOthers(iframe))
+		mediaPlayers.push({ frame: iframe, pause: () => widget.pause() })
+		soundcloudWidgets.push({ setVolume: (v) => widget.setVolume(v), input })
+		input.addEventListener("input", () => setSoundcloudVolume(Number(input.value)))
+	})
+}
+
 function setupSoundcloud() {
 	const facades = [...document.querySelectorAll<HTMLAnchorElement>("a.digest-soundcloud-facade")].filter(
 		(a) => !a.dataset.ready,
 	)
 	if (facades.length === 0) return
 	withSoundcloudApi(() => {})
+	// プレーヤーの読み込みに時間がかかるので、押されてから読み込むのではなく、画面に近づいたら先に読み込んでおく
+	const observer = new IntersectionObserver(
+		(records) => {
+			for (const r of records) {
+				if (!r.isIntersecting) continue
+				observer.unobserve(r.target)
+				mountSoundcloud(r.target as HTMLAnchorElement, false)
+			}
+		},
+		{ rootMargin: "600px 0px" },
+	)
 	for (const facade of facades) {
 		facade.dataset.ready = "true"
+		observer.observe(facade)
+		// 読み込む前に押されたときは、その場で差し替えて再生する
 		facade.addEventListener("click", (e) => {
 			e.preventDefault()
-			const iframe = document.createElement("iframe")
-			iframe.className = "digest-soundcloud"
-			const track = encodeURIComponent(`https://api.soundcloud.com/tracks/${facade.dataset.trackId}`)
-			iframe.src = `https://w.soundcloud.com/player/?url=${track}&auto_play=true&visual=true&show_comments=false&show_reposts=false`
-			iframe.title = facade.dataset.title ?? ""
-			iframe.allow = "autoplay; encrypted-media"
-			facade.replaceWith(iframe)
-			pauseOthers()
-			withSoundcloudApi(() => {
-				const SC = window.SC
-				if (!SC) return
-				const widget = SC.Widget(iframe)
-				widget.bind(SC.Widget.Events.PLAY, () => pauseOthers(iframe))
-				mediaPlayers.push({ frame: iframe, pause: () => widget.pause() })
-			})
+			observer.unobserve(facade)
+			mountSoundcloud(facade, true)
 		})
 	}
 }
@@ -1170,6 +1231,7 @@ function setupSoundcloud() {
 function renderDigest() {
 	// ページ遷移で前のページの動画は消えている
 	mediaPlayers = []
+	soundcloudWidgets = []
 	renderTweets()
 	setupDigestLists()
 	setupYoutube()
