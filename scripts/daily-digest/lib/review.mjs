@@ -126,7 +126,9 @@ export function formatMetrics(c) {
   if (c.source === "hatena") return `🔖${fmt(m.bookmarks)}users`
   if (c.source === "bluesky") return `♥${fmt(m.likes)} RP${fmt(m.reposts)}`
   if (c.source === "misskey") return `😀${fmt(m.reactions)} RN${fmt(m.renotes)}${c.images?.length ? ` 🖼${c.images.length}` : ""}`
+  if (c.source === "pixiv") return `♥${fmt(m.ratings)} 👁${fmt(m.views)} ${m.rank}位`
   if (c.source === "soundcloud") return `▶${fmt(m.plays)} ♥${fmt(m.likes)}${m.sharers ? ` 🔗${m.sharers}人` : ""}`
+  if (m.players != null) return `👥${fmt(m.players)}人`
   return `-${m.discountPercent}%`
 }
 

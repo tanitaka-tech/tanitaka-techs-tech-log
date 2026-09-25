@@ -2,8 +2,8 @@
 # 手で編集してもよいが、`pnpm digest curate ...` を使うと候補番号（#3 など）から ID を引いて書き込める。
 #
 # match（書いた条件をすべて満たす候補に当たる）:
-#   key:    個別の投稿・動画（x:<投稿ID> / youtube:<動画ID> / steam:<appID>）
-#   author: 投稿者（x:<ユーザーID> / youtube:<チャンネルID>）。X の @handle は変わるので使わない
+#   key:    個別の投稿・動画・曲（x:<投稿ID> / youtube:<動画ID> / soundcloud:<曲ID> / steam:<appID>）
+#   author: 投稿者（x:<ユーザーID> / youtube:<チャンネルID> / soundcloud:<ユーザーID>）。X の @handle は変わるので使わない
 #   genre:  config.yaml の genres の id（x-music / vtuber など）
 #   text:   本文・タイトルに対する正規表現（大文字小文字は区別しない）
 #   sharer: X のユーザーID（x:<ユーザーID>）。action: ignore-sharer 専用
@@ -12,7 +12,100 @@
 #   block:         候補から外す
 #   weight:        スコアに weight を掛ける（2 なら倍、0.5 なら半分）。当たったルールの weight はすべて掛け合わせる
 #   pin:           スコアや block に関係なく候補一覧に必ず残す（掲載済みのものは除く）
-#   ignore-sharer: X で YouTube を貼ったアカウントを共有者数に数えない（宣伝・bot 対策）
+#   ignore-sharer: X で YouTube・SoundCloud を貼ったアカウントを共有者数に数えない（宣伝・bot 対策）
 #
 # reason と added は必須。until（YYYY-MM-DD）を書くと、その日を過ぎたら効かなくなる。
-rules: []
+rules:
+  - match:
+      author: x:1171778117922197504
+    action: block
+    reason: 名言botで出典が確かめられない
+    added: 2026-09-26
+  - match:
+      text: "#PR"
+    action: weight
+    weight: 0.3
+    reason: PR（広告）付きの投稿は下げる
+    added: 2026-09-26
+  - match:
+      text: 歌ってみた|cover|カバー
+    action: block
+    reason: 歌ってみたなどのカバー曲は載せない
+    added: 2026-09-26
+  - match:
+      text: "#shorts"
+    action: block
+    reason: YouTube ショートは載せない
+    added: 2026-09-26
+  - match:
+      text: ティザー|teaser
+    action: block
+    reason: ティザーPVは載せない
+    added: 2026-09-26
+  - match:
+      text: bootleg
+    action: block
+    reason: 無許可のリミックス（bootleg）は載せない
+    added: 2026-09-26
+  - match:
+      text: PV|Trailer|トレーラー|ティザー|予告
+      genre: x-music
+    action: block
+    reason: 音楽・MV に PV・予告は載せない
+    added: 2026-09-26
+  - match:
+      key: x:2102963542748238165
+    action: block
+    reason: 生成AIの是非をめぐる論争（見るのも不快なので候補にも出さない）
+    added: 2026-09-26
+  - match:
+      key: x:2103157547305935153
+    action: block
+    reason: 生成AIの是非をめぐる論争（見るのも不快なので候補にも出さない）
+    added: 2026-09-26
+  - match:
+      key: x:2103440437445030130
+    action: block
+    reason: 生成AIの是非をめぐる論争（見るのも不快なので候補にも出さない）
+    added: 2026-09-26
+  - match:
+      key: x:2103160365056155974
+    action: block
+    reason: 生成AIの是非をめぐる論争（見るのも不快なので候補にも出さない）
+    added: 2026-09-26
+  - match:
+      key: x:2103111046995312685
+    action: block
+    reason: 生成AIの是非をめぐる論争（見るのも不快なので候補にも出さない）
+    added: 2026-09-26
+  - match:
+      key: x:2102787525702303750
+    action: block
+    reason: 生成AIの是非をめぐる論争（見るのも不快なので候補にも出さない）
+    added: 2026-09-26
+  - match:
+      key: x:2102831358972498158
+    action: block
+    reason: 生成AIの是非をめぐる論争（見るのも不快なので候補にも出さない）
+    added: 2026-09-26
+  - match:
+      text: feat|ft\.
+      genre: soundcloud
+    action: weight
+    weight: 2
+    reason: SoundCloud は歌声合成ソフトなどの「feat.」のオリジナル曲が採用されやすい
+    added: 2026-09-26
+  - match:
+      text: オープニング|\bOP\b
+      genre: anison
+    action: weight
+    weight: 1.5
+    reason: アニソンはオープニング映像が採用されやすい
+    added: 2026-09-26
+  - match:
+      text: エンディング|\bED\b
+      genre: anison
+    action: weight
+    weight: 0.5
+    reason: アニソンのエンディング映像は採用されにくい（同じアニメの OP と並ぶことが多い）
+    added: 2026-09-26

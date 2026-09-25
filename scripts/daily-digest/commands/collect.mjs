@@ -1,5 +1,5 @@
 /*
- * はてなブックマーク・Bluesky・Misskey・YouTube・SoundCloud・Steam（と、使う設定なら X）から、実行時点までの直近24時間（config.yaml の collect.windowHours。SoundCloud は7日）の候補を集めて
+ * はてなブックマーク・Bluesky・Misskey・pixiv・YouTube・SoundCloud・Steam（と、使う設定なら X）から、実行時点までの直近24時間（config.yaml の collect.windowHours。SoundCloud は7日）の候補を集めて
  * .digest-cache/<date>/candidates.json に保存する。<date> は記事の日付（既定は今日）。
  * X は従量課金なので、保存済みなら --force を付けない限り取り直さない。
  * --genre a,b を付けると、そのジャンルだけを取り直して保存済みの候補と差し替える（失敗したジャンルの取り直し用）。
@@ -11,8 +11,9 @@ import { recentWindow, todayJst } from "../lib/date.mjs"
 import { searchBlueskyGenre } from "../lib/bluesky.mjs"
 import { searchHatenaGenre } from "../lib/hatena.mjs"
 import { searchMisskeyGenre } from "../lib/misskey.mjs"
+import { searchPixivGenre } from "../lib/pixiv.mjs"
 import { searchSoundcloudGenre } from "../lib/soundcloud.mjs"
-import { fetchSteamSales } from "../lib/steam.mjs"
+import { fetchSteamNewReleases, fetchSteamSales } from "../lib/steam.mjs"
 import { searchXGenre } from "../lib/x.mjs"
 import { collectXYoutubeGenre } from "../lib/x-youtube.mjs"
 import { searchYoutubeGenre } from "../lib/youtube.mjs"
@@ -57,6 +58,8 @@ async function fetchAll(ctx, genres) {
         found = await searchBlueskyGenre(genre, window, now, drops)
       } else if (genre.source === "misskey") {
         found = await searchMisskeyGenre(genre, window, now, drops)
+      } else if (genre.source === "pixiv") {
+        found = await searchPixivGenre(genre, now, drops)
       } else if (genre.source === "soundcloud") {
         found = await searchSoundcloudGenre(genre, now, drops)
       } else if (genre.source === "youtube") {
@@ -65,6 +68,8 @@ async function fetchAll(ctx, genres) {
         const hours = genre.windowHours ?? config.youtube.windowHours
         const ytWindow = hours ? recentWindow(now, hours) : window
         found = await searchYoutubeGenre(genre, ytWindow, config, requireEnv("YOUTUBE_API_KEY"), now, drops)
+      } else if (genre.source === "steam-new" && config.steam.enabled) {
+        found = await fetchSteamNewReleases(genre, now, drops)
       } else if (genre.source === "steam" && config.steam.enabled) {
         found = await fetchSteamSales(genre, config)
       }

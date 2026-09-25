@@ -639,6 +639,42 @@ function renderBluesky() {
 	document.body.appendChild(script)
 }
 
+// pixiv 公式の埋め込みは幅が 700px 固定なので、枠の幅に合わせて縮小する。
+// 読み込むと ["<iframe の name>", 高さ] を postMessage で送ってくるので、高さもそれに合わせる
+const PIXIV_EMBED_WIDTH = 700
+function fitPixiv(frame: HTMLIFrameElement) {
+	const box = frame.parentElement
+	if (!box || box.clientWidth === 0) return
+	const scale = Math.min(1, box.clientWidth / PIXIV_EMBED_WIDTH)
+	const height = Number(frame.dataset.height ?? 0) || frame.offsetHeight
+	frame.style.height = `${height}px`
+	frame.style.transform = `scale(${scale})`
+	box.style.height = `${Math.ceil(height * scale)}px`
+}
+window.addEventListener("message", (e) => {
+	if (e.origin !== "https://embed.pixiv.net" || typeof e.data !== "string") return
+	try {
+		const [name, height] = JSON.parse(e.data)
+		const frame = document.querySelector<HTMLIFrameElement>(`iframe.digest-pixiv[name="${CSS.escape(String(name))}"]`)
+		if (!frame || !(height > 0)) return
+		frame.dataset.height = String(height)
+		fitPixiv(frame)
+	} catch {}
+})
+// カルーセルで表示が切り替わったとき・画面の幅が変わったときも合わせ直す
+const pixivResize = new ResizeObserver((entries) => {
+	for (const entry of entries) {
+		const frame = entry.target.querySelector<HTMLIFrameElement>("iframe.digest-pixiv")
+		if (frame) fitPixiv(frame)
+	}
+})
+function setupPixiv() {
+	for (const box of document.querySelectorAll<HTMLElement>(".digest-pixiv-frame:not([data-ready])")) {
+		box.dataset.ready = "true"
+		pixivResize.observe(box)
+	}
+}
+
 // デイリーダイジェストのカルーセル。
 // ページのスクロール中にカーソルが目次に乗っても、この時間（ms）以内に続く操作はページのスクロールとして扱う
 const PAGE_WHEEL_CONTINUE_MS = 200
@@ -1179,6 +1215,31 @@ function withYouTubeApi(callback: () => void) {
 	document.body.appendChild(script)
 }
 
+/**
+ * プレーヤーの下に「読み込み直す」「YouTube で開く」を付ける（最初は隠しておく）。
+ * YouTube が bot の確認（ログインを求める画面）を出したとき、別のタブでログインしてから読み込み直せるように。
+ * 確認の画面はプレーヤーではないので、プレーヤーの準備完了（onReady）が来ない・エラーになったときだけ出す
+ */
+function youtubePlayer(iframe: HTMLIFrameElement, url: string, onReload: () => void) {
+	const player = document.createElement("div")
+	player.className = "digest-youtube-player"
+	const help = document.createElement("div")
+	help.className = "digest-youtube-help"
+	help.hidden = true
+	const reload = document.createElement("button")
+	reload.type = "button"
+	reload.textContent = "読み込み直す"
+	reload.addEventListener("click", onReload)
+	const open = document.createElement("a")
+	open.href = url
+	open.target = "_blank"
+	open.rel = "noopener"
+	open.textContent = "YouTube で開く"
+	help.append("再生できないとき: ", reload, open)
+	player.append(iframe, help)
+	return player
+}
+
 function setupYoutube() {
 	const facades = [...document.querySelectorAll<HTMLAnchorElement>("a.digest-youtube-facade")].filter(
 		(a) => !a.dataset.ready,
@@ -1192,11 +1253,30 @@ function setupYoutube() {
 			e.preventDefault()
 			const iframe = document.createElement("iframe")
 			iframe.className = "digest-youtube"
-			iframe.src = `https://www.youtube-nocookie.com/embed/${facade.dataset.videoId}?enablejsapi=1&autoplay=1`
+			// youtube-nocookie.com はログインの Cookie を使わないので、「bot ではないことを確認」でログインしても
+			// 解除されない。www.youtube.com を使い、YouTube が確認に使う Referer と origin も渡す
+			const origin = encodeURIComponent(location.origin)
+			iframe.src = `https://www.youtube.com/embed/${facade.dataset.videoId}?enablejsapi=1&autoplay=1&origin=${origin}`
+			iframe.referrerPolicy = "strict-origin-when-cross-origin"
 			iframe.title = facade.dataset.title ?? ""
 			iframe.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
 			iframe.allowFullscreen = true
-			facade.replaceWith(iframe)
+			// 読み込み直すときは、サムネイルに戻してからもう一度押したことにする（プレーヤーも作り直す）
+			const wrapper = youtubePlayer(iframe, facade.href, () => {
+				clearTimeout(timer)
+				mediaPlayers = mediaPlayers.filter((p) => p.frame !== iframe)
+				wrapper.replaceWith(facade)
+				facade.click()
+			})
+			const help = wrapper.querySelector<HTMLElement>(".digest-youtube-help")
+			const showHelp = (show: boolean) => {
+				if (help) help.hidden = !show
+			}
+			let ready = false
+			// 準備完了が来なければ、bot の確認などで再生できていない
+			const YOUTUBE_READY_TIMEOUT_MS = 8000
+			const timer = setTimeout(() => showHelp(!ready), YOUTUBE_READY_TIMEOUT_MS)
+			facade.replaceWith(wrapper)
 			pauseOthers()
 			withYouTubeApi(() => {
 				const YT = window.YT
@@ -1213,12 +1293,20 @@ function setupYoutube() {
 				}
 				const player = new YT.Player(iframe, {
 					events: {
-						onReady: () => player.setVolume?.(mediaVolume()),
+						onReady: () => {
+							ready = true
+							clearTimeout(timer)
+							showHelp(false)
+							player.setVolume?.(mediaVolume())
+						},
+						// 埋め込み不可・削除済みなど
+						onError: () => showHelp(true),
 						onStateChange: (event) => {
 							// 目次の再生ボタンの表示に使う
 							// 読み込み中（3: BUFFERING）も再生中として扱い、ボタンの表示がちらつかないようにする
 							entry.playing = event.data === YT.PlayerState.PLAYING || event.data === 3
 							if (entry.playing) entry.started = true
+							if (entry.playing) showHelp(false)
 							updatePlayButtons()
 							if (entry.playing) pauseOthers(iframe)
 						},
@@ -1338,6 +1426,7 @@ function setupSoundcloud() {
  * プレビューの記事（先頭に .digest-review-banner がある）で、目次から採用・不採用の切り替えと並べ替えをする。
  * - 目次の ✅ / ⛔ を押すと採用・不採用が切り替わる
  * - 目次の項目をドラッグすると並べ替わる（ページは読み込み直さない）
+ * - 目次の 🖼 を押すと、その項目の画像が記事のサムネイルになる（selection.json の topicKey。記事の画像は公開用に書き出すときに変わる）
  * どちらも開発サーバーの API（scripts/daily-digest/dev-review.mjs）が selection.json に保存する。
  * 公開する記事にはバナーがないので何もしない
  */
@@ -1347,11 +1436,36 @@ async function setupDigestReview() {
 	banner.dataset.ready = "true"
 	const date = banner.dataset.date ?? ""
 	// 記事を書き出したあとに切り替え・並べ替えた分もあるので、保存済みの状態を読み直す（読めなければ記事の中の値）
-	let saved: { adopt: Record<string, boolean>; order: string[] } = { adopt: {}, order: [] }
+	let saved: { adopt: Record<string, boolean>; order: string[]; thumbnail?: string } = { adopt: {}, order: [] }
 	try {
 		const res = await fetch(`/__digest/selection?date=${date}`)
 		if (res.ok) saved = { adopt: {}, order: [], ...(await res.json()) }
 	} catch {}
+	// 記事のサムネイルに選んでいる項目と、その画像の表示
+	const thumbPreview = document.createElement("figure")
+	thumbPreview.className = "digest-review-thumb"
+	banner.append(thumbPreview)
+	const thumbBadges = new Map<string, HTMLElement>()
+	const showThumbnail = (key: string) => {
+		const entry = document.querySelector<HTMLElement>(`.digest-entry[data-key="${CSS.escape(key)}"]`)
+		const image = entry?.dataset.image
+		thumbPreview.innerHTML = ""
+		if (image) {
+			const img = document.createElement("img")
+			img.className = "no-lightbox"
+			img.src = image
+			img.alt = ""
+			const caption = document.createElement("figcaption")
+			caption.textContent = `サムネイル: ${entry?.dataset.label ?? key}`
+			thumbPreview.append(img, caption)
+		} else {
+			thumbPreview.textContent = "サムネイル: 未選択（目次の 🖼 で選べます）"
+		}
+		for (const [k, badge] of thumbBadges) {
+			badge.classList.toggle("selected", k === key)
+			badge.setAttribute("aria-pressed", String(k === key))
+		}
+	}
 	const status = document.createElement("p")
 	status.className = "digest-review-status"
 	banner.append(status)
@@ -1452,6 +1566,34 @@ async function setupDigestReview() {
 				if (e.key === "Enter" || e.key === " ") onToggle(e)
 			})
 
+			// 目次の 🖼。画像のある項目だけ、記事のサムネイルに選べる
+			if (entry.dataset.image) {
+				const thumb = document.createElement("span")
+				thumb.className = "digest-review-thumb-badge"
+				thumb.setAttribute("role", "button")
+				thumb.tabIndex = 0
+				thumb.textContent = "🖼"
+				thumb.setAttribute("aria-label", "この項目の画像を記事のサムネイルにする")
+				thumb.title = "記事のサムネイルにする"
+				tab?.append(thumb)
+				thumbBadges.set(key, thumb)
+				const onThumb = async (e: Event) => {
+					e.stopPropagation()
+					e.preventDefault()
+					try {
+						await post("/__digest/thumbnail", { key })
+						showThumbnail(key)
+						status.textContent = `保存しました: サムネイルを ${entry.dataset.label ?? key} に`
+					} catch (err) {
+						fail("サムネイル", err)
+					}
+				}
+				thumb.addEventListener("click", onThumb)
+				thumb.addEventListener("keydown", (e) => {
+					if (e.key === "Enter" || e.key === " ") onThumb(e)
+				})
+			}
+
 			// 目次の項目のドラッグで並べ替える
 			if (!tab || !list) continue
 			tab.draggable = true
@@ -1497,6 +1639,7 @@ async function setupDigestReview() {
 			})
 		}
 	}
+	showThumbnail(saved.thumbnail || banner.dataset.thumbKey || "")
 }
 let dragging: HTMLElement | undefined
 
@@ -1510,6 +1653,7 @@ function renderDigest() {
 	setupDigestReview()
 	setupYoutube()
 	setupSoundcloud()
+	setupPixiv()
 }
 
 renderDigest()

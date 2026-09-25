@@ -5,7 +5,9 @@
  *   GET  /__digest/selection?date=YYYY-MM-DD   → { adopt: { <キー>: true|false }, order: [<キー>, ...] }
  *   POST /__digest/adopt  { date, key, adopt } → selection.json の該当項目の adopt を書き換える
  *   POST /__digest/order  { date, keys }       → keys（1つのカテゴリの項目）をこの順に並べ替える
+ *   POST /__digest/thumbnail { date, key }     → 記事のサムネイルにする項目（selection.json の topicKey）を key にする
  *
+ * GET は { adopt, order, thumbnail: <topicKey の候補のキー> } を返す。
  * 記事（.md）は書き出し直さない（書き出すと開発サーバーがページを読み込み直すため）。
  * プレビューの画面は GET の order で並べ直し、公開用に書き出すとき（render --final）に selection.json の順が使われる。
  *
@@ -63,7 +65,8 @@ export function digestReview() {
               const resolve = resolver(date)
               const adopt = Object.fromEntries(selection.items.map((i) => [resolve(i.key), i.adopt !== false]))
               const order = selection.ordered ? selection.items.map((i) => resolve(i.key)) : []
-              return send(res, 200, { adopt, order })
+              const thumbnail = selection.topicKey ? resolve(selection.topicKey) : ""
+              return send(res, 200, { adopt, order, thumbnail })
             }
             if (req.method === "POST" && url.pathname === "/__digest/adopt") {
               const { date, key, adopt } = JSON.parse(await readBody(req))
@@ -79,6 +82,20 @@ export function digestReview() {
               item.adopt = adopt
               fs.writeFileSync(file, `${JSON.stringify(selection, null, 2)}\n`)
               return send(res, 200, { key, adopt })
+            }
+            if (req.method === "POST" && url.pathname === "/__digest/thumbnail") {
+              const { date, key } = JSON.parse(await readBody(req))
+              if (!DATE_RE.test(date ?? "") || typeof key !== "string") return send(res, 400, { error: "date・key を指定してください" })
+              const file = paths(date).selection
+              const selection = readJson(file, null)
+              if (!selection) return send(res, 404, { error: `${file} がありません` })
+              const resolve = resolver(date)
+              const item = selection.items.find((i) => resolve(i.key) === key)
+              if (!item) return send(res, 404, { error: `${key} は selection.json にありません` })
+              // 番号（#8）のまま書いておくと、review の番号と見比べやすい
+              selection.topicKey = item.key
+              fs.writeFileSync(file, `${JSON.stringify(selection, null, 2)}\n`)
+              return send(res, 200, { key })
             }
             if (req.method === "POST" && url.pathname === "/__digest/order") {
               const { date, keys } = JSON.parse(await readBody(req))

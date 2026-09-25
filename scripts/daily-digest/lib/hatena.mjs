@@ -1,6 +1,7 @@
 /*
  * はてなブックマークと、各サイトの RSS からニュース・記事を集める。API キー不要。
  *   categories: 人気エントリー（カテゴリ別の RSS）
+ *   entrylists: 新着エントリー（カテゴリ別の RSS。人気エントリーに入る前の記事）
  *   tags:       タグ検索の RSS（そのタグが付いた記事。ツール名など、人気エントリーに入りにくい話題向け）
  *   feeds:      各サイトの RSS / Atom（公式ブログ・ニュースサイト）。人気の目安にブックマーク数を数え直す
  * ブックマーク数の伸び率で並べ、記事の og:image を使ったリンクカードで載せる。
@@ -24,10 +25,10 @@ function decode(s) {
 
 const tag = (xml, name) => xml.match(new RegExp(`<${name}>([\\s\\S]*?)</${name}>`))?.[1]
 
-/** カテゴリ（it / game / knowledge など）の人気エントリーを読む */
-export async function fetchHotentries(category) {
-  const res = await fetch(`https://b.hatena.ne.jp/hotentry/${category}.rss`, { headers: HEADERS })
-  if (!res.ok) throw new Error(`はてなブックマーク ${res.status} hotentry/${category}`)
+/** カテゴリ（it / game / knowledge など）の人気エントリー（list が entrylist なら新着エントリー）を読む */
+export async function fetchHotentries(category, list = "hotentry") {
+  const res = await fetch(`https://b.hatena.ne.jp/${list}/${category}.rss`, { headers: HEADERS })
+  if (!res.ok) throw new Error(`はてなブックマーク ${res.status} ${list}/${category}`)
   const xml = await res.text()
   return [...xml.matchAll(/<item [\s\S]*?<\/item>/g)].map(([item]) => ({
     url: decode(tag(item, "link")),
@@ -134,6 +135,10 @@ export async function searchHatenaGenre(genre, now = new Date(), drops = {}) {
   const byUrl = new Map()
   for (const category of genre.categories ?? []) {
     for (const e of await fetchHotentries(category)) byUrl.set(e.url, e)
+  }
+  // 新着エントリーは人気エントリーに入る前の記事。人気エントリーと重なる記事は人気エントリーの方を使う
+  for (const category of genre.entrylists ?? []) {
+    for (const e of await fetchHotentries(category, "entrylist")) if (!byUrl.has(e.url)) byUrl.set(e.url, e)
   }
   // タグ検索で見つけた記事は、タグで話題が決まっているので include で絞らない
   for (const t of genre.tags ?? []) {

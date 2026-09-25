@@ -152,27 +152,35 @@ export function toYoutubeCandidate(v, genre, now = new Date()) {
 
 /**
  * 対象期間（window）に公開された動画を再生数順に検索する。
- * search.list は1回100ユニット消費するので、ジャンルごとに1回だけ呼ぶ。
+ * search.list は1ページ（50件）ごとに100ユニット消費するので、既定では1ページだけ読む。
+ * ショートが上位を占めて候補が残らないジャンルは、genre.pages で読むページを増やす。
  */
 export async function searchYoutubeGenre(genre, window, config, key, now = new Date(), drops = {}) {
   const yc = config.youtube
-  const search = await ytGet(
-    "/search",
-    {
-      part: "id",
-      type: "video",
-      order: "viewCount",
-      publishedAfter: window.start.toISOString(),
-      publishedBefore: window.end.toISOString(),
-      regionCode: yc.regionCode,
-      relevanceLanguage: yc.relevanceLanguage,
-      videoCategoryId: genre.videoCategoryId,
-      q: genre.q,
-      maxResults: yc.maxResults,
-    },
-    key,
-  )
-  const ids = (search.items ?? []).map((i) => i.id.videoId).filter(Boolean)
+  const ids = []
+  let pageToken
+  for (let page = 0; page < (genre.pages ?? 1); page++) {
+    const search = await ytGet(
+      "/search",
+      {
+        part: "id",
+        type: "video",
+        order: "viewCount",
+        publishedAfter: window.start.toISOString(),
+        publishedBefore: window.end.toISOString(),
+        regionCode: yc.regionCode,
+        relevanceLanguage: yc.relevanceLanguage,
+        videoCategoryId: genre.videoCategoryId,
+        q: genre.q,
+        maxResults: yc.maxResults,
+        pageToken,
+      },
+      key,
+    )
+    ids.push(...(search.items ?? []).map((i) => i.id.videoId).filter(Boolean))
+    pageToken = search.nextPageToken
+    if (!pageToken) break
+  }
   if (ids.length === 0) return []
 
   const requireKana = genre.requireKana ?? yc.requireKana
