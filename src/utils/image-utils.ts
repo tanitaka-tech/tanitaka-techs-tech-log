@@ -4,9 +4,11 @@ import { url } from "./url-utils";
 
 // TODO temporary workaround for images dynamic import
 // https://github.com/withastro/astro/issues/3373
-const localImages = import.meta.glob<ImageMetadata>("../**", {
-	import: "default",
-});
+// only match images so that other files (e.g. CSS) are not bundled on their own
+const localImages = import.meta.glob<ImageMetadata>(
+	"../**/*.{png,jpg,jpeg,webp,gif,avif,svg,PNG,JPG,JPEG,WEBP,GIF,AVIF,SVG}",
+	{ import: "default" },
+);
 
 export function isLocalImage(src: string): boolean {
 	return !(
