@@ -1,4 +1,5 @@
 import type {
+	CommentConfig,
 	LicenseConfig,
 	NavBarConfig,
 	ProfileConfig,
@@ -66,4 +67,15 @@ export const licenseConfig: LicenseConfig = {
 	enable: true,
 	name: "CC BY-NC-SA 4.0",
 	url: "https://creativecommons.org/licenses/by-nc-sa/4.0/",
+};
+
+export const commentConfig: CommentConfig = {
+	// https://giscus.app/ja
+	giscus: {
+		enable: true,
+		repo: "tanitaka-tech/tanitaka-techs-tech-log",
+		repoId: "R_kgDORRblEQ",
+		category: "Announcements",
+		categoryId: "DIC_kwDORRblEc4DGXh5",
+	},
 };
