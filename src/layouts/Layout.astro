@@ -605,6 +605,8 @@ if (window.swup) {
 </script>
 
 <script>
+import { OverlayScrollbars } from "overlayscrollbars"
+
 // デイリーダイジェスト用。X の公式埋め込みは埋め込みがあるページでだけ widgets.js を読み込み、
 // Swup のページ遷移後は再描画する
 function renderTweets() {
@@ -629,7 +631,8 @@ let lastPageWheel = 0
 document.addEventListener(
 	"wheel",
 	(e) => {
-		if (!(e.target instanceof Element && e.target.closest(".digest-toc"))) lastPageWheel = performance.now()
+		// 目次・サムネイルの帯の上での操作は、ページのスクロールとして数えない
+		if (!(e.target instanceof Element && e.target.closest(".digest-toc, .digest-strip"))) lastPageWheel = performance.now()
 	},
 	{ passive: true, capture: true },
 )
@@ -669,23 +672,91 @@ function setupDigestHeading(heading: HTMLElement, body: HTMLElement, count: numb
 
 let digestBodyCount = 0
 
+// ドットの帯で1件送るのに必要なホイールの量（px）。マウスホイールの1ノッチがおよそこの量
+const DIGEST_WHEEL_STEP = 100
+// ドットを一度に見せる数。これより多いときは選択中を中心に一部だけ見せる
+const DIGEST_VISIBLE_DOTS = 11
+
 /**
- * デイリーダイジェストの項目一覧。左に目次、右に選択中の項目を1件だけ表示する。
- * - 目次は右側と同じ高さにし、長いときは目次の中でスクロールする
- * - 目次のスクロール位置に応じて表示する項目が変わる（一番上で最初の項目、一番下で最後の項目）。
- *   クリック・上下キーでも選べる
- * - 右側の高さは一番高い項目に固定し、切り替えで高さが変わらないようにする
- * - 項目に data-step があれば、目次に区切りの小見出しを入れる
- * - 項目の切り替えは、前の項目がきゅっと縮んで消え、次の項目が少し行き過ぎてから収まるアニメーションにする
- * - ページのスクロール中にカーソルが目次に乗っても、目次ではなくページをスクロールし続ける
+ * ホイール・トラックパッドの入力を、量に比例した項目の送りに変換する。
+ * 操作の始めはすぐに1件送り（軽い操作でも反応するように）、そのあとは DIGEST_WHEEL_STEP ごとに1件ずつ送る。
+ * 入力が途切れるか向きが変わったら数え直す
+ */
+function createWheelStepper(step: (dir: number) => void) {
+	let lastTime = 0
+	let direction = 0
+	// 次の1件を送るまでにたまった量（操作の向きにそろえた正の値）
+	let amount = 0
+	return (delta: number) => {
+		if (Math.abs(delta) < 1) return
+		const now = performance.now()
+		const dir = Math.sign(delta)
+		const fresh = now - lastTime > 200 || dir !== direction
+		lastTime = now
+		if (fresh) {
+			direction = dir
+			amount = 0
+			step(dir)
+			return
+		}
+		amount += Math.abs(delta)
+		while (amount >= DIGEST_WHEEL_STEP) {
+			step(dir)
+			amount -= DIGEST_WHEEL_STEP
+		}
+	}
+}
+
+/** container の中で el が中央あたりに来るようにスクロールする */
+function revealIn(container: HTMLElement, el: HTMLElement, axis: "x" | "y", behavior: ScrollBehavior) {
+	const c = container.getBoundingClientRect()
+	const r = el.getBoundingClientRect()
+	if (axis === "y") {
+		container.scrollTo({ top: container.scrollTop + (r.top - c.top) - (c.height - r.height) / 2, behavior })
+	} else {
+		container.scrollTo({ left: container.scrollLeft + (r.left - c.left) - (c.width - r.width) / 2, behavior })
+	}
+}
+
+/** 目次・サムネイルの帯に出す小さな画像。画像がない項目（アイコンが取れていない X の投稿など）は CSS で文字を出す */
+function digestThumb(entry: HTMLElement) {
+	const thumb = document.createElement("span")
+	thumb.className = `digest-toc-thumb ${entry.className.match(/digest-entry-(\w+)/)?.[1] ?? ""}`
+	if (entry.dataset.thumb) {
+		const img = document.createElement("img")
+		img.src = entry.dataset.thumb
+		img.alt = ""
+		img.loading = "lazy"
+		img.className = "no-lightbox"
+		thumb.append(img)
+	}
+	return thumb
+}
+
+/**
+ * デイリーダイジェストの項目一覧。左に選択中の項目とその下のサムネイルの帯、右に目次を表示する。
+ * - 項目は1件だけ表示し、切り替えは前の項目が縮んで消え、次の項目が少し行き過ぎてから収まるアニメーションにする。
+ *   高さは一番高い項目に揃える
+ * - 項目の下にカルーセルのドットを並べる。クリック・左右のボタンで選び、ドットの上でのスクロール（縦・横）では
+ *   量に比例して送る。端まで行ってもページのスクロールにはしない。ドットが多いときは選択中を中心に一部だけ見せる
+ * - 目次は左側と同じ高さにし、長いときは目次の中でスクロールする（スクロールバーはサイトの他の部分と同じ見た目）。
+ *   クリック・上下キーで選ぶ
+ * - PC では目次の項目にマウスを乗せている間だけプレビューし、離れると元の項目に戻る
+ * - スマホでは目次を長押しすると「なぞるモード」になり、指を滑らせるとプレビュー、離したところの項目を選ぶ
+ * - 項目に data-step があれば、目次に区切りの小見出しを入れ、ドットでは区切りの境目に間隔を空ける
+ * - ページのスクロール中にカーソルが目次・ドットに乗っても、ページをスクロールし続ける
  */
 function setupDigestLists() {
 	const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)")
+	const canHover = window.matchMedia("(hover: hover) and (pointer: fine)")
+	const scrollBehavior = (): ScrollBehavior => (reduceMotion.matches ? "instant" : "smooth")
 	for (const panel of document.querySelectorAll<HTMLElement>(".digest-items")) {
 		if (panel.dataset.ready) continue
 		panel.dataset.ready = "true"
 		const entries = [...panel.children] as HTMLElement[]
 		if (entries.length === 0) continue
+		const last = entries.length - 1
+		const clamp = (i: number) => Math.max(0, Math.min(last, i))
 
 		// カードの下半分。見出しとの区切り線と一覧を入れ、見出しから開閉できるようにする
 		const body = document.createElement("div")
@@ -710,40 +781,33 @@ function setupDigestLists() {
 
 		const wrap = document.createElement("div")
 		wrap.className = "digest-browser"
-		content.append(wrap)
+		const main = document.createElement("div")
+		main.className = "digest-main"
+		const strip = document.createElement("div")
+		strip.className = "digest-strip"
+		strip.setAttribute("aria-label", "項目の切り替え")
 		const toc = document.createElement("div")
 		toc.className = "digest-toc"
 		toc.setAttribute("role", "tablist")
 		toc.setAttribute("aria-orientation", "vertical")
-		wrap.append(toc, panel)
+		content.append(wrap)
+		wrap.append(main, toc)
+		main.append(panel, strip)
 		panel.classList.add("switching")
 
-		let active = -1
-		let lastSwitch = 0
 		let lastStep = ""
 		const tabs = entries.map((entry, i) => {
 			const step = entry.dataset.step ?? ""
 			if (step && step !== lastStep) {
-				const heading = document.createElement("div")
-				heading.className = "digest-toc-step"
-				heading.textContent = step
-				toc.append(heading)
+				const stepHeading = document.createElement("div")
+				stepHeading.className = "digest-toc-step"
+				stepHeading.textContent = step
+				toc.append(stepHeading)
 			}
 			lastStep = step
 			const tab = document.createElement("button")
 			tab.type = "button"
 			tab.setAttribute("role", "tab")
-			// 小さなサムネイル。画像がない項目（投稿者のアイコンが取れていない X の投稿など）は種類の頭文字で埋める
-			const thumb = document.createElement("span")
-			thumb.className = `digest-toc-thumb ${entry.className.match(/digest-entry-(\w+)/)?.[1] ?? ""}`
-			if (entry.dataset.thumb) {
-				const img = document.createElement("img")
-				img.src = entry.dataset.thumb
-				img.alt = ""
-				img.loading = "lazy"
-				img.className = "no-lightbox"
-				thumb.append(img)
-			}
 			const text = document.createElement("span")
 			text.className = "digest-toc-text"
 			const label = document.createElement("span")
@@ -753,77 +817,61 @@ function setupDigestLists() {
 			meta.className = "digest-toc-meta"
 			meta.textContent = entry.dataset.meta ?? ""
 			text.append(label, meta)
-			tab.append(thumb, text)
-			tab.addEventListener("click", () => select(i, true))
+			tab.append(digestThumb(entry), text)
+			tab.addEventListener("click", () => commit(i))
+			if (canHover.matches) tab.addEventListener("mouseenter", () => hoverPreview(i))
 			entry.setAttribute("role", "tabpanel")
 			toc.append(tab)
 			return tab
 		})
+		const button = (className: string, label: string, text: string, onClick: () => void) => {
+			const btn = document.createElement("button")
+			btn.type = "button"
+			btn.className = className
+			btn.setAttribute("aria-label", label)
+			btn.textContent = text
+			btn.addEventListener("click", onClick)
+			return btn
+		}
+		const dots = entries.map((entry, i) => {
+			const dot = button("digest-dot", `${i + 1}件目: ${entry.dataset.label ?? ""}`, "", () => commit(i))
+			dot.title = entry.dataset.label ?? ""
+			// 区切り（data-step）の境目に間隔を空ける
+			if (i > 0 && (entry.dataset.step ?? "") !== (entries[i - 1].dataset.step ?? "")) dot.classList.add("step-start")
+			return dot
+		})
+		const dotList = document.createElement("div")
+		dotList.className = "digest-dots"
+		dotList.append(...dots)
+		const prev = button("digest-strip-arrow", "前へ", "‹", () => commit(active - 1))
+		const next = button("digest-strip-arrow", "次へ", "›", () => commit(active + 1))
+		const count = document.createElement("span")
+		count.className = "digest-strip-count"
+		const many = entries.length > DIGEST_VISIBLE_DOTS
+		strip.classList.toggle("many", many)
+		strip.append(prev, dotList, next, ...(many ? [count] : []))
 
-		// 目次のスクロール位置 → 注目位置。上端から下端へ、スクロール量に比例して動かす。
-		// こうすると一番上で最初の項目、一番下で最後の項目になり、選ばれる項目は常に目次の見える範囲に入る
-		const maxScroll = () => toc.scrollHeight - toc.clientHeight
-		const focusY = () => {
-			const max = maxScroll()
-			return toc.scrollTop + (max > 0 ? toc.scrollTop / max : 0) * toc.clientHeight
-		}
-		const tabAt = (y: number) => {
-			let best = 0
-			let bestDistance = Number.POSITIVE_INFINITY
-			tabs.forEach((tab, i) => {
-				const top = tab.offsetTop
-				const distance = y < top ? top - y : Math.max(0, y - (top + tab.offsetHeight))
-				if (distance < bestDistance) {
-					best = i
-					bestDistance = distance
-				}
-			})
-			return best
-		}
+		// 目次のスクロールバーを、ページ全体やコードブロックと同じ見た目にする
+		const tocViewport = OverlayScrollbars(toc, {
+			overflow: { x: "hidden" },
+			scrollbars: { theme: "scrollbar-base scrollbar-auto", autoHide: "leave", autoHideDelay: 500, autoHideSuspend: false },
+		}).elements().viewport
 
-		// クリック・キー操作で選んだときは、その項目が注目位置に来るよう目次をスクロールする。
-		// スクロールが止まるまでは、スクロール位置からの選択を止める
-		let syncing = false
-		let settleTimer: ReturnType<typeof setTimeout> | undefined
-		const settle = () => {
-			clearTimeout(settleTimer)
-			settleTimer = setTimeout(() => {
-				syncing = false
-			}, 150)
-		}
-		const scrollTocTo = (i: number) => {
-			const max = maxScroll()
-			if (max <= 0) return
-			const center = tabs[i].offsetTop + tabs[i].offsetHeight / 2
-			// focusY(s) = s + (s / max) * clientHeight = center を解く
-			const top = Math.max(0, Math.min(max, (center * max) / (max + toc.clientHeight)))
-			syncing = true
-			settle()
-			toc.scrollTo({ top, behavior: "smooth" })
-		}
-
-		const select = (index: number, syncScroll = false) => {
-			const i = Math.max(0, Math.min(entries.length - 1, index))
-			if (syncScroll) scrollTocTo(i)
-			if (i === active) return
-			const from = entries[active]
+		// 表示中の項目。前の項目は縮んで消え、次の項目は少し行き過ぎてから収まる
+		let shown = -1
+		let lastSwitch = 0
+		const show = (i: number) => {
+			if (i === shown) return
+			const from = entries[shown]
 			const to = entries[i]
-			const dir = Math.sign(i - active) || 1
-			// 見えなくなる項目の動画は止める
-			if (from) {
-				for (const { frame, pause } of mediaPlayers) if (from.contains(frame)) pause()
-			}
+			const dir = Math.sign(i - shown) || 1
 			for (const el of [from, to]) for (const a of el?.getAnimations() ?? []) a.cancel()
 			from?.classList.remove("active", "leaving")
 			to.classList.add("active")
-			tabs.forEach((tab, j) => {
-				tab.setAttribute("aria-selected", String(j === i))
-				tab.tabIndex = j === i ? 0 : -1
-			})
-			// 目次を速くスクロールして次々に切り替わるときや、初回表示ではアニメーションしない
+			// 速く次々に切り替わるときや、初回表示ではアニメーションしない
 			const now = performance.now()
-			const animate = active !== -1 && now - lastSwitch > 90 && !reduceMotion.matches
-			active = i
+			const animate = shown !== -1 && now - lastSwitch > 90 && !reduceMotion.matches
+			shown = i
 			lastSwitch = now
 			if (!animate) return
 			if (from) {
@@ -848,35 +896,165 @@ function setupDigestLists() {
 			)
 		}
 
+		// 選択中の項目。プレビュー中は、表示だけが一時的に別の項目になる
+		let active = -1
+		let previewing = -1
+		const clearPreviewMarks = () => {
+			for (const tab of tabs) tab.classList.remove("previewing")
+		}
+		// 選んだ直後は、目次が自動でスクロールして止まっているカーソルの下に別の項目が来るので、
+		// マウスが実際に動くまではホバーでのプレビューをしない
+		let hoverLocked = false
+		const commit = (index: number) => {
+			const i = clamp(index)
+			hoverLocked = true
+			previewing = -1
+			clearPreviewMarks()
+			if (i !== active) {
+				// 見えなくなる項目の動画は止める
+				const previous = entries[active]
+				if (previous) {
+					for (const { frame, pause } of mediaPlayers) if (previous.contains(frame)) pause()
+				}
+				active = i
+				tabs.forEach((tab, j) => {
+					tab.setAttribute("aria-selected", String(j === i))
+					tab.tabIndex = j === i ? 0 : -1
+				})
+				dots.forEach((dot, j) => {
+					dot.setAttribute("aria-current", String(j === i))
+					// 中心から離れたドットほど小さくする（CSS で参照）
+					dot.dataset.distance = String(Math.min(Math.abs(j - i), 5))
+				})
+				prev.disabled = i === 0
+				next.disabled = i === last
+				count.textContent = `${i + 1} / ${entries.length}`
+				revealIn(tocViewport, tabs[i], "y", scrollBehavior())
+				if (many) revealIn(dotList, dots[i], "x", scrollBehavior())
+			}
+			show(i)
+		}
+		const preview = (i: number) => {
+			previewing = i
+			clearPreviewMarks()
+			if (i !== active) tabs[i].classList.add("previewing")
+			show(i)
+		}
+		const endPreview = () => {
+			if (previewing === -1) return
+			previewing = -1
+			clearPreviewMarks()
+			show(active)
+		}
+		const hoverPreview = (i: number) => {
+			if (!hoverLocked) preview(i)
+		}
+		// スクロールでカーソルの下の要素が変わったときはカーソルの座標が変わらないので、座標で本当に動いたかを見る
+		let pointer = { x: -1, y: -1 }
+		toc.addEventListener("mouseleave", endPreview)
+		toc.addEventListener("mousemove", (e) => {
+			const moved = e.clientX !== pointer.x || e.clientY !== pointer.y
+			pointer = { x: e.clientX, y: e.clientY }
+			if (!hoverLocked || !moved) return
+			hoverLocked = false
+			// ロック中に乗った項目は mouseenter が済んでいるので、ここでプレビューする
+			const target = e.target instanceof Element ? e.target.closest("button") : null
+			const i = target ? tabs.indexOf(target as HTMLButtonElement) : -1
+			if (i !== -1 && i !== active) preview(i)
+		})
+
+		// ページのスクロールの途中でカーソルが目次・ドットに乗っただけなら、そのままページをスクロールする
+		const continuePageScroll = (e: WheelEvent) => {
+			const now = performance.now()
+			if (now - lastPageWheel > PAGE_WHEEL_CONTINUE_MS) return false
+			lastPageWheel = now
+			e.preventDefault()
+			window.scrollBy({ top: e.deltaY * (e.deltaMode === 1 ? 16 : 1), behavior: "instant" })
+			return true
+		}
+		toc.addEventListener("wheel", continuePageScroll, { passive: false })
+
+		// ドットの上でのホイール・トラックパッド（縦・横どちらでも）は量に比例して送る。
+		// 端まで行ってもページのスクロールにはせず、ドットの上ではページを動かさない
+		const onWheel = createWheelStepper((dir) => commit(active + dir))
+		strip.addEventListener(
+			"wheel",
+			(e) => {
+				if (continuePageScroll(e)) return
+				e.preventDefault()
+				onWheel((Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY) * (e.deltaMode === 1 ? 16 : 1))
+			},
+			{ passive: false },
+		)
+
+		const onKey = (e: KeyboardEvent) => {
+			const next = {
+				ArrowDown: active + 1,
+				ArrowRight: active + 1,
+				ArrowUp: active - 1,
+				ArrowLeft: active - 1,
+				Home: 0,
+				End: last,
+			}[e.key]
+			if (next === undefined) return
+			e.preventDefault()
+			commit(next)
+			;(e.currentTarget === strip ? dots : tabs)[active].focus({ preventScroll: true })
+		}
+		toc.addEventListener("keydown", onKey)
+		strip.addEventListener("keydown", onKey)
+
+		// スマホのなぞるモード。長押しで始まり、指の下の項目をプレビューし、離したところで選ぶ。
+		// 長押しの前に指が動いたら、普通の目次のスクロールとして扱う
+		let pressTimer: ReturnType<typeof setTimeout> | undefined
+		let scrubbing = false
+		let pressPoint = { x: 0, y: 0 }
+		const scrubAt = (x: number, y: number) => {
+			const tab = document.elementFromPoint(x, y)?.closest<HTMLButtonElement>("[role=tab]")
+			const i = tab ? tabs.indexOf(tab) : -1
+			if (i !== -1 && i !== previewing) preview(i)
+		}
 		toc.addEventListener(
-			"scroll",
-			() => {
-				if (syncing) return settle()
-				select(tabAt(focusY()))
+			"touchstart",
+			(e) => {
+				if (e.touches.length !== 1) return
+				pressPoint = { x: e.touches[0].clientX, y: e.touches[0].clientY }
+				clearTimeout(pressTimer)
+				pressTimer = setTimeout(() => {
+					scrubbing = true
+					toc.classList.add("scrubbing")
+					navigator.vibrate?.(10)
+					scrubAt(pressPoint.x, pressPoint.y)
+				}, 350)
 			},
 			{ passive: true },
 		)
 		toc.addEventListener(
-			"wheel",
+			"touchmove",
 			(e) => {
-				const now = performance.now()
-				if (now - lastPageWheel > PAGE_WHEEL_CONTINUE_MS) return
-				// ページのスクロールの途中でカーソルが乗っただけなので、目次ではなくページをスクロールする
-				lastPageWheel = now
+				const touch = e.touches[0]
+				if (!scrubbing) {
+					if (Math.hypot(touch.clientX - pressPoint.x, touch.clientY - pressPoint.y) > 8) clearTimeout(pressTimer)
+					return
+				}
 				e.preventDefault()
-				window.scrollBy({ top: e.deltaY * (e.deltaMode === 1 ? 16 : 1), behavior: "instant" })
+				scrubAt(touch.clientX, touch.clientY)
 			},
 			{ passive: false },
 		)
-		toc.addEventListener("keydown", (e) => {
-			const next = { ArrowDown: active + 1, ArrowUp: active - 1, Home: 0, End: entries.length - 1 }[e.key]
-			if (next === undefined) return
+		const endScrub = (e: TouchEvent) => {
+			clearTimeout(pressTimer)
+			if (!scrubbing) return
+			scrubbing = false
+			toc.classList.remove("scrubbing")
+			// 指を離したときのクリックで別の項目が選ばれないようにする
 			e.preventDefault()
-			select(next, true)
-			tabs[active].focus({ preventScroll: true })
-		})
+			commit(previewing === -1 ? active : previewing)
+		}
+		toc.addEventListener("touchend", endScrub)
+		toc.addEventListener("touchcancel", endScrub)
 
-		// 右側の高さを一番高い項目に揃え、目次も同じ高さにする（埋め込みの読み込みで高さが変わるたびに更新）
+		// 項目の高さを一番高い項目に揃える（埋め込みの読み込みで高さが変わるたびに更新）
 		const resize = () => {
 			const height = Math.max(...entries.map((entry) => entry.offsetHeight))
 			wrap.style.setProperty("--digest-height", `${height}px`)
@@ -884,7 +1062,7 @@ function setupDigestLists() {
 		const observer = new ResizeObserver(resize)
 		for (const entry of entries) observer.observe(entry)
 		resize()
-		select(0)
+		commit(0)
 	}
 }
 
