@@ -1,10 +1,11 @@
 /*
- * X・YouTube・Steam から対象日の候補を集めて .digest-cache/<date>/candidates.json に保存する。
+ * X・YouTube・Steam から、実行時点までの直近24時間（config.yaml の collect.windowHours）の候補を集めて
+ * .digest-cache/<date>/candidates.json に保存する。<date> は記事の日付（既定は今日）。
  * X は従量課金なので、保存済みなら --force を付けない限り取り直さない。
  */
 import fs from "node:fs"
 import { writeJson } from "../lib/context.mjs"
-import { dayWindowJst } from "../lib/date.mjs"
+import { recentWindow, todayJst } from "../lib/date.mjs"
 import { fetchSteamSales } from "../lib/steam.mjs"
 import { searchXGenre } from "../lib/x.mjs"
 import { collectXYoutubeGenre } from "../lib/x-youtube.mjs"
@@ -18,7 +19,7 @@ function requireEnv(name) {
 
 async function fetchAll(ctx) {
   const { config, now } = ctx
-  const window = dayWindowJst(ctx.date, now)
+  const window = recentWindow(now, config.collect?.windowHours ?? 24)
   const budget = { remaining: config.x.maxPostsPerRun }
   // 読み取り上限を先頭のジャンルが使い切らないよう、残りの X ジャンルで xWeight（既定1）の比で分ける
   const usesX = (g) => g.source === "x" || g.source === "x-youtube"
@@ -71,7 +72,13 @@ export async function collect(ctx, { force = false, fixture } = {}) {
     return
   }
 
+  // 集めるのは常に「今から24時間以内」なので、別の日付の記事用に集めると中身と日付が食い違う
+  if (ctx.date !== todayJst(ctx.now)) {
+    throw new Error(`収集は実行時点から直近の投稿が対象なので、--date には今日（${todayJst(ctx.now)}）しか指定できません`)
+  }
   const { candidates, errors, window, xReads } = await fetchAll(ctx)
+  // すべて失敗したときに空の候補を保存すると、次回から取り直されなくなるので保存しない
+  if (candidates.length === 0) throw new Error("候補が1件も集まりませんでした（保存していません）")
   writeJson(paths.candidates, candidates)
   writeJson(paths.collect, {
     collectedAt: new Date().toISOString(),

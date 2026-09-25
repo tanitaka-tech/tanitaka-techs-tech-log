@@ -89,7 +89,7 @@ export function toYoutubeCandidate(v, genre, now = new Date()) {
 }
 
 /**
- * 指定日（JST）に公開された動画を再生数順に検索する。
+ * 対象期間（window）に公開された動画を再生数順に検索する。
  * search.list は1回100ユニット消費するので、ジャンルごとに1回だけ呼ぶ。
  */
 export async function searchYoutubeGenre(genre, window, config, key, now = new Date()) {

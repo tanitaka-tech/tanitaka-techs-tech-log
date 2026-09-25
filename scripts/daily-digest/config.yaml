@@ -1,5 +1,5 @@
 # デイリーダイジェストの設定
-# 対象は「指定日（JST）の 00:00〜実行時点」に投稿されたものだけ。
+# 対象は実行時点から collect.windowHours 時間以内に投稿されたものだけ（記事の日付は実行日）。
 # 人間の判断（ブロック・重みづけ・推し）は curation.yaml に書く。
 
 article:
@@ -25,6 +25,9 @@ article:
   # 手書きの記事と見分けるため、生成記事に必ず付けるタグ
   tags: [自動生成]
   dir: src/content/posts/daily-digest
+
+collect:
+  windowHours: 24 # 実行時点から何時間さかのぼって集めるか
 
 review:
   candidatesPerGenre: 6 # ジャンルごとに候補一覧に出す上位件数（pin した候補は別枠で必ず出る）

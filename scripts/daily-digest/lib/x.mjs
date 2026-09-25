@@ -17,7 +17,7 @@ export async function xGet(path, params, token) {
 }
 
 /**
- * ジャンルのクエリで指定日の投稿を検索し、候補に変換する。
+ * ジャンルのクエリで対象期間（window）の投稿を検索し、候補に変換する。
  * budget.remaining を超えて読み取らない（従量課金対策）。share はこのジャンルに割り当てた読み取り件数。
  */
 export async function searchXGenre(genre, window, config, token, budget, now = new Date(), share = Infinity) {

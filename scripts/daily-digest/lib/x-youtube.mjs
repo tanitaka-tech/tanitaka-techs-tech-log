@@ -44,7 +44,7 @@ async function searchPosts(genre, window, config, token, limit) {
   return { posts, users }
 }
 
-/** リストのタイムライン（新しい順）を、対象日より古い投稿が出てくるか limit 件に達するまで読む */
+/** リストのタイムライン（新しい順）を、対象期間より古い投稿が出てくるか limit 件に達するまで読む */
 async function listPosts(genre, window, token, limit) {
   const posts = []
   const users = new Map()
