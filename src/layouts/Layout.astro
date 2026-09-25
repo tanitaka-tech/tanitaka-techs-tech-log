@@ -600,3 +600,29 @@ if (window.swup) {
 	document.addEventListener("swup:enable", setup)
 }
 </script>
+
+<script>
+// X の公式埋め込み。埋め込みがあるページでだけ widgets.js を読み込み、
+// Swup のページ遷移後は再描画する
+function renderTweets() {
+	if (!document.querySelector("blockquote.twitter-tweet")) return
+	if (window.twttr?.widgets) {
+		window.twttr.widgets.load(document.querySelector("main") ?? undefined)
+		return
+	}
+	if (document.getElementById("twitter-wjs")) return
+	const script = document.createElement("script")
+	script.id = "twitter-wjs"
+	script.async = true
+	script.src = "https://platform.twitter.com/widgets.js"
+	document.body.appendChild(script)
+}
+
+renderTweets()
+const setupTweets = () => window.swup.hooks.on("page:view", renderTweets)
+if (window.swup) {
+	setupTweets()
+} else {
+	document.addEventListener("swup:enable", setupTweets)
+}
+</script>

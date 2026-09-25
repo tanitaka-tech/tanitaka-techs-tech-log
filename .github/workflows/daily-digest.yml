@@ -1,0 +1,114 @@
+name: Daily Digest
+
+# 当面は手動実行のみ。Actions タブの「Run workflow」から実行する。
+on:
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "対象日（JST, YYYY-MM-DD）。空なら今日"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write # ラベル作成用
+
+concurrency:
+  group: daily-digest
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check secrets
+        env:
+          X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          missing=0
+          for name in X_BEARER_TOKEN YOUTUBE_API_KEY ANTHROPIC_API_KEY; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Secret $name が未設定、または空です"
+              missing=1
+            fi
+          done
+          exit $missing
+
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@cdca7365b2dadb8aad0a33bc7601856ffabcc48e # v4.3.0
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Close stale digest PRs
+        run: |
+          cutoff=$(date -u -d '3 days ago' +%s)
+          gh pr list --label auto-digest --state open --json number,createdAt \
+            --jq ".[] | select((.createdAt | fromdate) < $cutoff) | .number" |
+          while read -r n; do
+            gh pr close "$n" --delete-branch --comment "3日以上レビューされなかったため自動でクローズしました。"
+          done
+
+      - name: Generate article
+        id: gen
+        env:
+          INPUT_DATE: ${{ inputs.date }}
+          X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: node scripts/daily-digest/index.mjs --date "$INPUT_DATE"
+
+      # 生データ（投稿本文など）はリポジトリに残さず、Actions の artifact として短期間だけ保持する
+      - name: Upload raw data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: digest-cache
+          path: .digest-cache/
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Summary
+        if: always()
+        run: cat .digest-cache/*/pr-body.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+
+      - name: Build check
+        if: steps.gen.outputs.skipped == 'false'
+        run: pnpm build
+
+      - name: Create pull request
+        if: steps.gen.outputs.skipped == 'false'
+        env:
+          ARTICLE: ${{ steps.gen.outputs.article }}
+          TITLE: ${{ steps.gen.outputs.title }}
+        run: |
+          date=$(basename "$ARTICLE" .md)
+          branch="auto/digest-$date"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git add "$ARTICLE"
+          git commit -m "feat: デイリーダイジェスト $date"
+          git push --force origin "$branch"
+          gh label create auto-digest --color 1d76db --description "自動生成されたダイジェスト" --force
+          gh label create needs-review --color fbca04 --description "公開前レビュー待ち" --force
+          gh pr create --base develop --head "$branch" \
+            --title "$TITLE" \
+            --body-file ".digest-cache/$date/pr-body.md" \
+            --label auto-digest --label needs-review

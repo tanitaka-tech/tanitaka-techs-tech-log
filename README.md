@@ -34,6 +34,38 @@ draft: false
 ---
 ```
 
+## デイリーダイジェスト（自動生成記事）
+
+X・YouTube・Steam からその日（JST）に伸びた投稿を集め、Claude が選定・要約した記事の下書きを作ります。公開前に必ず人間がレビューし、PR をマージしたときだけ公開されます。
+
+- 出力先: `src/content/posts/daily-digest/YYYY-MM-DD.md`
+- 生成記事には `自動生成` タグが付きます（手書きの記事と区別するため）
+- 設定（検索キーワード・X の読み取り上限・掲載件数など）: `scripts/daily-digest/config.yaml`
+- 投稿本文などの生データは `.digest-cache/` に保存され、コミットされません
+
+### ローカルで実行
+
+```sh
+cp .env.example .env   # X_BEARER_TOKEN / YOUTUBE_API_KEY / ANTHROPIC_API_KEY を記入
+
+pnpm digest                        # 今日分を生成
+pnpm digest --date 2026-09-25      # 対象日を指定
+pnpm digest --x-limit 100          # X の読み取り件数を抑えて試す（80以上推奨）
+pnpm digest --mock-llm             # Claude を呼ばずに収集と記事の組み立てだけ試す
+pnpm digest:check-deleted          # 削除・非公開になった掲載項目を記事から取り除く
+pnpm dev                           # 生成された記事を確認
+```
+
+### GitHub Actions で実行
+
+リポジトリの Secrets に `X_BEARER_TOKEN` / `YOUTUBE_API_KEY` / `ANTHROPIC_API_KEY` を登録し、Settings → Actions → General で「Allow GitHub Actions to create and approve pull requests」を有効にしておきます。
+
+1. Actions → **Daily Digest** → Run workflow（対象日は空なら今日）
+2. `auto-digest` ラベル付きの PR が作られるので、チェックリストに沿ってレビュー
+3. マージすると公開されます（3日以上放置された PR は次回実行時に自動でクローズ）
+
+削除された投稿の確認は Actions → **Digest Check Deleted** から実行します。
+
 ## ライセンス
 
 コードは [MIT License](LICENSE)（Fuwari に準拠）、記事は [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) で公開しています。

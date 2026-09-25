@@ -1,0 +1,92 @@
+# デイリーダイジェストの設定
+# 対象は「指定日（JST）の 00:00〜実行時点」に投稿されたものだけ。
+
+article:
+  minItems: 5 # これ未満しか採用できなければ記事を作らない
+  maxItems: 8
+  category: デイリーダイジェスト
+  # 手書きの記事と見分けるため、生成記事に必ず付けるタグ
+  tags: [自動生成]
+  dir: src/content/posts/daily-digest
+
+llm:
+  model: claude-opus-5
+  candidatesPerGenre: 6 # ジャンルごとにLLMへ渡す上位候補数
+
+x:
+  # 従量課金なので、1回の実行で読み取る投稿数の上限を決めておく
+  maxPostsPerRun: 600
+  maxResultsPerQuery: 50 # 10〜100
+  minAgeHours: 1 # 投稿から1時間未満は伸び率が振れるので除外
+  minLikes: 30
+  # 全クエリ共通で付与する条件
+  baseQuery: "lang:ja -is:retweet -is:reply"
+
+youtube:
+  regionCode: JP
+  relevanceLanguage: ja
+  maxResults: 25
+  minViews: 1000
+
+steam:
+  enabled: true
+  minDiscountPercent: 50
+  maxItems: 10
+
+genres:
+  - id: ai
+    label: 最新AI技術
+    source: x
+    query: '(生成AI OR LLM OR ChatGPT OR Claude OR Gemini OR "AIモデル" OR "画像生成AI" OR "動画生成AI")'
+
+  - id: creative-tools
+    label: 最新クリエイティブツール
+    source: x
+    query: '(Blender OR Photoshop OR "CLIP STUDIO" OR クリスタ OR Figma OR "After Effects" OR "DaVinci Resolve" OR Procreate) (新機能 OR アップデート OR リリース OR 発表)'
+
+  - id: tool-tips
+    label: ツールの使い方・使いこなし術
+    source: x
+    query: '(Blender OR Photoshop OR "CLIP STUDIO" OR クリスタ OR Figma OR "After Effects" OR "DaVinci Resolve" OR Procreate) (Tips OR 小技 OR やり方 OR 使い方 OR 時短 OR ショートカット)'
+
+  - id: illust
+    label: 伸びているイラスト
+    source: x
+    query: "(イラスト OR 絵描きさんと繋がりたい OR 落書き) has:images -is:quote"
+    minLikes: 500
+
+  - id: games
+    label: 最新ゲーム
+    source: x
+    query: '(新作ゲーム OR 発売日 OR 配信開始 OR 新作発表 OR "Nintendo Direct" OR Steam) (ゲーム OR Switch OR PS5 OR Steam)'
+
+  - id: expression
+    label: 表現の解説
+    source: x
+    query: '(演出 OR 構図 OR 色彩 OR 表現 OR 作画) (解説 OR 考察 OR ポイント OR 技法)'
+
+  - id: motivation
+    label: やる気が出る・元気になる
+    source: x
+    query: "(モチベーション OR やる気 OR 元気が出る OR 前向き OR 習慣化)"
+
+  - id: sale
+    label: セール・無料配布
+    source: x
+    query: "(セール OR 無料配布 OR 期間限定無料 OR 割引) (ゲーム OR ソフト OR ツール OR 素材 OR Steam)"
+
+  - id: sale-steam
+    label: セール・無料配布
+    source: steam
+
+  - id: mv
+    label: MV
+    source: youtube
+    videoCategoryId: "10"
+    q: "MV|ミュージックビデオ|Music Video"
+
+  - id: music
+    label: 音楽
+    source: youtube
+    videoCategoryId: "10"
+    q: ""

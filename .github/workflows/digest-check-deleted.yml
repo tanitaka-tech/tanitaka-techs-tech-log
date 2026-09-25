@@ -1,0 +1,59 @@
+name: Digest Check Deleted
+
+# 掲載済みの投稿・動画が削除や非公開になっていないか確認し、該当項目を消すPRを作る。
+# X の読み取りは従量課金なので、当面は手動実行のみ。
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@cdca7365b2dadb8aad0a33bc7601856ffabcc48e # v4.3.0
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check and remove unavailable items
+        env:
+          X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+        run: node scripts/daily-digest/check-deleted.mjs
+
+      - name: Create pull request
+        run: |
+          if git diff --quiet; then
+            echo "削除が必要な項目はありませんでした"
+            exit 0
+          fi
+          branch="auto/remove-deleted-$(date -u +%Y%m%d%H%M)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git commit -am "fix: 削除・非公開になった掲載項目を取り除く"
+          git push origin "$branch"
+          {
+            echo "削除・非公開・埋め込み不可になった投稿や動画を、ダイジェスト記事から取り除きます。"
+            echo
+            cat .digest-cache/removed.md
+          } > body.md
+          gh pr create --base develop --head "$branch" \
+            --title "fix: 削除された掲載項目を取り除く" --body-file body.md
