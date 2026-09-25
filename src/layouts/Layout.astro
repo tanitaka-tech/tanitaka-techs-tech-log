@@ -793,8 +793,10 @@ function setupDigestLists() {
 		content.append(divider)
 		const heading = panel.closest("section")?.querySelector<HTMLElement>(":scope > h2")
 		if (heading) setupDigestHeading(heading, body, entries.length, panel.dataset.collapsed !== "true")
+		const hasMedia = entries.some((e) => e.matches(".digest-entry-youtube, .digest-entry-soundcloud"))
 		if (entries.length < 2) {
 			content.append(panel)
+			if (hasMedia) content.append(createVolumeControl())
 			continue
 		}
 
@@ -812,6 +814,8 @@ function setupDigestLists() {
 		content.append(wrap)
 		wrap.append(main, toc)
 		main.append(panel, strip)
+		// 動画・曲のあるカルーセルには、表示中の項目に関係なく音量のスライダーを常に出す
+		if (hasMedia) main.append(createVolumeControl())
 		panel.classList.add("switching")
 
 		let lastStep = ""
@@ -920,7 +924,9 @@ function setupDigestLists() {
 		// 選んだ直後は、目次が自動でスクロールして止まっているカーソルの下に別の項目が来るので、
 		// マウスが実際に動くまではホバーで切り替えない
 		let hoverLocked = false
-		const commit = (index: number) => {
+		// reveal: 選んだ項目が見えるよう目次・ドットをスクロールするか（ホバーで選んだときは、
+		// カーソルの下の目次が動くと使いにくいのでスクロールしない）
+		const commit = (index: number, reveal = true) => {
 			const i = clamp(index)
 			hoverLocked = true
 			if (i !== active) {
@@ -942,13 +948,13 @@ function setupDigestLists() {
 				prev.disabled = i === 0
 				next.disabled = i === last
 				count.textContent = `${i + 1} / ${entries.length}`
-				revealIn(tocViewport, tabs[i], "y", scrollBehavior())
+				if (reveal) revealIn(tocViewport, tabs[i], "y", scrollBehavior())
 				if (many) revealIn(dotList, dots[i], "x", scrollBehavior())
 			}
 			show(i)
 		}
 		const hoverSelect = (i: number) => {
-			if (!hoverLocked) commit(i)
+			if (!hoverLocked) commit(i, false)
 		}
 		// スクロールでカーソルの下の要素が変わったときはカーソルの座標が変わらないので、座標で本当に動いたかを見る
 		let pointer = { x: -1, y: -1 }
@@ -960,7 +966,7 @@ function setupDigestLists() {
 			// ロック中に乗った項目は mouseenter が済んでいるので、ここで切り替える
 			const target = e.target instanceof Element ? e.target.closest("button") : null
 			const i = target ? tabs.indexOf(target as HTMLButtonElement) : -1
-			if (i !== -1 && i !== active) commit(i)
+			if (i !== -1 && i !== active) commit(i, false)
 		})
 
 		// ページのスクロールの途中でカーソルが目次・ドットに乗っただけなら、そのままページをスクロールする
@@ -1012,7 +1018,7 @@ function setupDigestLists() {
 		const scrubAt = (x: number, y: number) => {
 			const tab = document.elementFromPoint(x, y)?.closest<HTMLButtonElement>("[role=tab]")
 			const i = tab ? tabs.indexOf(tab) : -1
-			if (i !== -1 && i !== active) commit(i)
+			if (i !== -1 && i !== active) commit(i, false)
 		}
 		toc.addEventListener(
 			"touchstart",
@@ -1067,9 +1073,49 @@ function setupDigestLists() {
 
 // YouTube・SoundCloud は最初サムネイルだけを表示し、クリックでプレーヤーに差し替える。
 // 1本再生したら他（YouTube と SoundCloud の両方）を一時停止する
-let mediaPlayers: { frame: HTMLIFrameElement; pause: () => void }[] = []
+let mediaPlayers: { frame: HTMLIFrameElement; pause: () => void; setVolume: (volume: number) => void }[] = []
 const pauseOthers = (frame?: HTMLIFrameElement) => {
 	for (const other of mediaPlayers) if (other.frame !== frame) other.pause()
+}
+
+// 動画・曲の音量（0〜100）。SoundCloud のプレーヤーには音量の操作がないので、カルーセルの下に自前の
+// スライダーを常に出し、YouTube と SoundCloud の全プレーヤーで共有してブラウザに覚えておく
+const MEDIA_VOLUME_KEY = "digest-media-volume"
+let volumeInputs: HTMLInputElement[] = []
+
+function mediaVolume() {
+	try {
+		// 以前は SoundCloud だけの音量として保存していた
+		const raw = localStorage.getItem(MEDIA_VOLUME_KEY) ?? localStorage.getItem("digest-soundcloud-volume")
+		const v = Number(raw)
+		return raw !== null && Number.isFinite(v) ? v : 60
+	} catch {
+		return 60
+	}
+}
+
+function setMediaVolume(volume: number) {
+	try {
+		localStorage.setItem(MEDIA_VOLUME_KEY, String(volume))
+	} catch {}
+	for (const p of mediaPlayers) p.setVolume(volume)
+	for (const input of volumeInputs) input.value = String(volume)
+}
+
+/** 音量のスライダー。動画・曲のあるカルーセルの下に付ける */
+function createVolumeControl() {
+	const label = document.createElement("label")
+	label.className = "digest-volume"
+	label.innerHTML = '<span aria-hidden="true">🔊</span><span class="sr-only">動画・曲の音量</span>'
+	const input = document.createElement("input")
+	input.type = "range"
+	input.min = "0"
+	input.max = "100"
+	input.value = String(mediaVolume())
+	input.addEventListener("input", () => setMediaVolume(Number(input.value)))
+	volumeInputs.push(input)
+	label.append(input)
+	return label
 }
 const youtubeApiCallbacks: (() => void)[] = []
 
@@ -1110,13 +1156,18 @@ function setupYoutube() {
 				if (!YT) return
 				const player = new YT.Player(iframe, {
 					events: {
+						onReady: () => player.setVolume?.(mediaVolume()),
 						onStateChange: (event) => {
 							if (event.data !== YT.PlayerState.PLAYING) return
 							pauseOthers(iframe)
 						},
 					},
 				})
-				mediaPlayers.push({ frame: iframe, pause: () => player.pauseVideo?.() })
+				mediaPlayers.push({
+					frame: iframe,
+					pause: () => player.pauseVideo?.(),
+					setVolume: (v) => player.setVolume?.(v),
+				})
 			})
 		})
 	}
@@ -1134,31 +1185,8 @@ function withSoundcloudApi(callback: () => void) {
 	script.addEventListener("load", callback, { once: true })
 }
 
-// SoundCloud の音量（0〜100）。プレーヤーに音量の操作がないので自前で付け、全曲で共有して覚えておく
-const SOUNDCLOUD_VOLUME_KEY = "digest-soundcloud-volume"
-let soundcloudWidgets: { setVolume: (volume: number) => void; input: HTMLInputElement }[] = []
-
-function soundcloudVolume() {
-	try {
-		const v = Number(localStorage.getItem(SOUNDCLOUD_VOLUME_KEY))
-		return Number.isFinite(v) && localStorage.getItem(SOUNDCLOUD_VOLUME_KEY) !== null ? v : 60
-	} catch {
-		return 60
-	}
-}
-
-function setSoundcloudVolume(volume: number) {
-	try {
-		localStorage.setItem(SOUNDCLOUD_VOLUME_KEY, String(volume))
-	} catch {}
-	for (const w of soundcloudWidgets) {
-		w.setVolume(volume)
-		w.input.value = String(volume)
-	}
-}
-
 /**
- * アートワーク（ファサード）を SoundCloud のプレーヤーに差し替え、下に音量の操作を付ける。
+ * アートワーク（ファサード）を SoundCloud のプレーヤーに差し替える（音量はカルーセルの下のスライダー）。
  * autoPlay はクリックで差し替えたとき（読み込みが済む前に押されたとき）だけ
  */
 function mountSoundcloud(facade: HTMLAnchorElement, autoPlay: boolean) {
@@ -1171,27 +1199,16 @@ function mountSoundcloud(facade: HTMLAnchorElement, autoPlay: boolean) {
 	iframe.src = `https://w.soundcloud.com/player/?url=${track}&auto_play=${autoPlay}&visual=true&show_comments=false&show_reposts=false`
 	iframe.title = facade.dataset.title ?? ""
 	iframe.allow = "autoplay; encrypted-media"
-	const volume = document.createElement("label")
-	volume.className = "digest-soundcloud-volume"
-	volume.innerHTML = '<span aria-hidden="true">🔊</span><span class="sr-only">音量</span>'
-	const input = document.createElement("input")
-	input.type = "range"
-	input.min = "0"
-	input.max = "100"
-	input.value = String(soundcloudVolume())
-	volume.append(input)
-	player.append(iframe, volume)
+	player.append(iframe)
 	facade.replaceWith(player)
 	if (autoPlay) pauseOthers()
 	withSoundcloudApi(() => {
 		const SC = window.SC
 		if (!SC) return
 		const widget = SC.Widget(iframe)
-		widget.bind(SC.Widget.Events.READY, () => widget.setVolume(soundcloudVolume()))
+		widget.bind(SC.Widget.Events.READY, () => widget.setVolume(mediaVolume()))
 		widget.bind(SC.Widget.Events.PLAY, () => pauseOthers(iframe))
-		mediaPlayers.push({ frame: iframe, pause: () => widget.pause() })
-		soundcloudWidgets.push({ setVolume: (v) => widget.setVolume(v), input })
-		input.addEventListener("input", () => setSoundcloudVolume(Number(input.value)))
+		mediaPlayers.push({ frame: iframe, pause: () => widget.pause(), setVolume: (v) => widget.setVolume(v) })
 	})
 }
 
@@ -1243,6 +1260,32 @@ async function setupDigestReview() {
 	const status = document.createElement("p")
 	status.className = "digest-review-status"
 	banner.append(status)
+	// 並べ替えると記事を書き出し直して読み込み直すので、元のスクロール位置に戻す
+	try {
+		const y = sessionStorage.getItem("digest-review-scroll")
+		if (y !== null) {
+			sessionStorage.removeItem("digest-review-scroll")
+			window.scrollTo({ top: Number(y), behavior: "instant" })
+		}
+	} catch {}
+	/** keys の順に並べ替えて保存する。開発サーバーが記事を書き出し直すので、読み込み直す */
+	const saveOrder = async (keys: string[]) => {
+		status.textContent = "並べ替えを保存しています…"
+		try {
+			const res = await fetch("/__digest/order", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ date, keys }),
+			})
+			if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`)
+			try {
+				sessionStorage.setItem("digest-review-scroll", String(window.scrollY))
+			} catch {}
+			location.reload()
+		} catch (e) {
+			status.textContent = `並べ替えを保存できませんでした（pnpm dev で開いていますか？）: ${e instanceof Error ? e.message : e}`
+		}
+	}
 
 	for (const panel of document.querySelectorAll<HTMLElement>(".digest-items[data-limit]")) {
 		const entries = [...panel.querySelectorAll<HTMLElement>(":scope > .digest-entry[data-key]")]
@@ -1257,6 +1300,47 @@ async function setupDigestReview() {
 			counter.textContent = `採用 ${n} / 上限 ${limit}`
 			counter.classList.toggle("over", n > limit)
 		}
+		const keys = entries.map((e) => e.dataset.key ?? "")
+		/** from 番目の項目を to 番目に動かした順で保存する */
+		const move = (from: number, to: number) => {
+			if (from === to || to < 0 || to >= keys.length) return
+			const next = [...keys]
+			next.splice(to, 0, ...next.splice(from, 1))
+			saveOrder(next)
+		}
+		// 目次の項目はドラッグで並べ替えられる
+		let dragging = -1
+		tabs.forEach((tab, i) => {
+			tab.draggable = true
+			tab.addEventListener("dragstart", (e) => {
+				dragging = i
+				e.dataTransfer?.setData("text/plain", keys[i])
+				tab.classList.add("digest-dragging")
+			})
+			tab.addEventListener("dragend", () => {
+				tab.classList.remove("digest-dragging")
+				for (const t of tabs) t.classList.remove("digest-drop-before", "digest-drop-after")
+			})
+			tab.addEventListener("dragover", (e) => {
+				if (dragging === -1) return
+				e.preventDefault()
+				const after = e.offsetY > tab.offsetHeight / 2
+				tab.classList.toggle("digest-drop-before", !after)
+				tab.classList.toggle("digest-drop-after", after)
+			})
+			tab.addEventListener("dragleave", () => tab.classList.remove("digest-drop-before", "digest-drop-after"))
+			tab.addEventListener("drop", (e) => {
+				if (dragging === -1) return
+				e.preventDefault()
+				const after = e.offsetY > tab.offsetHeight / 2
+				// 自分より後ろに落とすときは、抜いたぶん1つ前にずれる
+				let to = i + (after ? 1 : 0)
+				if (dragging < to) to -= 1
+				const from = dragging
+				dragging = -1
+				move(from, to)
+			})
+		})
 		entries.forEach((entry, i) => {
 			const key = entry.dataset.key ?? ""
 			const button = document.createElement("button")
@@ -1292,9 +1376,22 @@ async function setupDigestReview() {
 					button.disabled = false
 				}
 			})
+			// 前後に1つずつ動かすボタン（ドラッグできない端末でも並べ替えられるように）
+			const up = document.createElement("button")
+			up.type = "button"
+			up.className = "digest-review-move"
+			up.textContent = "↑ 前へ"
+			up.disabled = i === 0
+			up.addEventListener("click", () => move(i, i - 1))
+			const down = document.createElement("button")
+			down.type = "button"
+			down.className = "digest-review-move"
+			down.textContent = "↓ 後ろへ"
+			down.disabled = i === entries.length - 1
+			down.addEventListener("click", () => move(i, i + 1))
 			const bar = document.createElement("div")
 			bar.className = "digest-review-bar"
-			bar.append(button)
+			bar.append(up, down, button)
 			entry.prepend(bar)
 		})
 	}
@@ -1303,7 +1400,7 @@ async function setupDigestReview() {
 function renderDigest() {
 	// ページ遷移で前のページの動画は消えている
 	mediaPlayers = []
-	soundcloudWidgets = []
+	volumeInputs = []
 	renderTweets()
 	renderBluesky()
 	setupDigestLists()

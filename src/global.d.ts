@@ -12,8 +12,8 @@ declare global {
 		YT?: {
 			Player: new (
 				el: HTMLIFrameElement,
-				options: { events: { onStateChange: (e: { data: number }) => void } },
-			) => { pauseVideo?: () => void };
+				options: { events: { onReady?: () => void; onStateChange: (e: { data: number }) => void } },
+			) => { pauseVideo?: () => void; setVolume?: (volume: number) => void };
 			PlayerState: { PLAYING: number };
 		};
 		onYouTubeIframeAPIReady?: () => void;

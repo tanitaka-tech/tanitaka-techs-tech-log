@@ -4,9 +4,11 @@
  *
  *   GET  /__digest/selection?date=YYYY-MM-DD   → { adopt: { <キー>: true|false } }
  *   POST /__digest/adopt  { date, key, adopt } → selection.json の該当項目の adopt を書き換える
+ *   POST /__digest/order  { date, keys }       → keys（1つのカテゴリの項目）をこの順に並べ替え、プレビューを書き出し直す
  *
  * 画面側（採用のトグル）は Layout.astro。プレビューの記事（render の既定）にだけ出る。
  */
+import { execFileSync } from "node:child_process"
 import fs from "node:fs"
 import path from "node:path"
 
@@ -74,6 +76,28 @@ export function digestReview() {
               item.adopt = adopt
               fs.writeFileSync(file, `${JSON.stringify(selection, null, 2)}\n`)
               return send(res, 200, { key, adopt })
+            }
+            if (req.method === "POST" && url.pathname === "/__digest/order") {
+              const { date, keys } = JSON.parse(await readBody(req))
+              if (!DATE_RE.test(date ?? "") || !Array.isArray(keys) || keys.some((k) => typeof k !== "string")) {
+                return send(res, 400, { error: "date・keys を指定してください" })
+              }
+              const file = paths(date).selection
+              const selection = readJson(file, null)
+              if (!selection) return send(res, 404, { error: `${file} がありません` })
+              const resolve = resolver(date)
+              // 並べ替える項目が今ある位置に、新しい順で入れ直す（ほかのカテゴリの項目の位置は変えない）
+              const slots = selection.items.flatMap((item, i) => (keys.includes(resolve(item.key)) ? [i] : []))
+              if (slots.length !== keys.length) return send(res, 400, { error: "selection.json にない項目があります" })
+              const byKey = new Map(slots.map((i) => [resolve(selection.items[i].key), selection.items[i]]))
+              slots.forEach((slot, n) => {
+                selection.items[slot] = byKey.get(keys[n])
+              })
+              // render は、手で並べ替えた記事ではスコア順に並べ直さない
+              selection.ordered = true
+              fs.writeFileSync(file, `${JSON.stringify(selection, null, 2)}\n`)
+              execFileSync("node", ["scripts/daily-digest/index.mjs", "render", "--date", date], { stdio: "pipe" })
+              return send(res, 200, { keys })
             }
             return send(res, 404, { error: "not found" })
           } catch (e) {

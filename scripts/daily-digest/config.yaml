@@ -68,7 +68,7 @@ youtube:
   excludeShorts: true # ショート動画を除く（/shorts/<ID> が開けるかで判定する）
   maxDurationMinutes: 15 # これより長い動画（歌枠・雑談などの配信アーカイブ）を除く
   # 音楽・MV に載せないタイトル（アニメの PV・予告・CM など）。ジャンルごとに excludeTitle で上書きできる
-  excludeTitle: "PV|Trailer|トレーラー|ティザー|予告|告知|CM|番宣|本編|切り抜き|生成してみた|AIカバー|AI歌唱"
+  excludeTitle: "PV|Trailer|トレーラー|ティザー|予告|告知|CM|番宣|本編|切り抜き|生成してみた|AIカバー|AI歌唱|ランキング|TOP ?\\d+|ベスト\\d+|まとめ|メドレー|予想"
   # 何時間前までに公開された動画を検索するか（音楽は24時間では再生数が集まらないので長めに）
   windowHours: 72
 
