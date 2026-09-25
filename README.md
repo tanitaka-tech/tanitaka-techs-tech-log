@@ -29,6 +29,7 @@ description: 記事の概要   # 任意
 image: ./cover.jpg       # 任意。OGP画像にも使われます
 tags: [Astro, Blog]
 category: 技術
+canonical: https://zenn.dev/...  # 任意。他サイトとのクロスポスト時の正規URL
 draft: false
 ---
 ```
