@@ -15,6 +15,13 @@ declare global {
 			PlayerState: { PLAYING: number };
 		};
 		onYouTubeIframeAPIReady?: () => void;
+		// SoundCloud Widget API（同じく、他のプレーヤーと同時に再生させないため）
+		SC?: {
+			Widget: ((el: HTMLIFrameElement) => {
+				bind: (event: string, callback: () => void) => void;
+				pause: () => void;
+			}) & { Events: { PLAY: string } };
+		};
 		pagefind: {
 			search: (query: string) => Promise<{
 				results: Array<{
