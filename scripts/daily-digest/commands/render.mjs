@@ -28,6 +28,7 @@ export function render(ctx, { force = false, final = false } = {}) {
   const raw = readJson(ctx.paths.selection)
 
   const warnings = []
+  // 上限を超えているカテゴリ・記事全体
   const overLimit = []
   const perCategory = new Map()
   const seen = new Set()
@@ -48,18 +49,16 @@ export function render(ctx, { force = false, final = false } = {}) {
     }
     if (seen.has(key)) continue
     const label = e.c.genreLabel
-    const n = perCategory.get(label) ?? 0
-    // プレビューでは上限を超えても載せ、どれを外すか人間が決められるようにする
-    const over =
-      n >= categoryLimit(label)
-        ? `${label} の上限 ${categoryLimit(label)} 件を超えています`
-        : items.length >= config.article.maxItems
-          ? `記事全体の上限 ${config.article.maxItems} 件を超えています`
-          : null
-    if (over) overLimit.push(`#${e.no}: ${over}`)
     seen.add(key)
-    perCategory.set(label, n + 1)
-    items.push({ ...item, key, overLimit: over })
+    perCategory.set(label, (perCategory.get(label) ?? 0) + 1)
+    items.push({ ...item, key })
+  }
+  // プレビューでは上限を超えても載せ、どれを外すか人間が決められるようにする（カテゴリ・記事全体ごとに1行で知らせる）
+  for (const [label, n] of perCategory) {
+    if (n > categoryLimit(label)) overLimit.push(`${label}: ${n}件（上限 ${categoryLimit(label)}件）`)
+  }
+  if (items.length > config.article.maxItems) {
+    overLimit.push(`記事全体: ${items.length}件（上限 ${config.article.maxItems}件）`)
   }
   if (final && overLimit.length) {
     throw new Error(`上限を超えている項目があります。selection.json から外してください:\n${overLimit.join("\n")}`)
@@ -91,6 +90,7 @@ export function render(ctx, { force = false, final = false } = {}) {
         ...warnings,
         ...overLimit,
         ...items.filter((i) => i.note).map((i) => `#${numbers[i.key]}: ${i.note}`),
+        ...(raw.news ?? []).filter((n) => n.note).map((n) => `ニュース「${n.title}」: ${n.note}`),
       ]
   const article = renderArticle({
     date,

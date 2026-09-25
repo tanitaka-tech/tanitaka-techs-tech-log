@@ -146,7 +146,7 @@ function newsCard(n) {
  * 記事の最後に置く「ネットで話題のニュース」。カテゴリと同じカルーセルで見せ、最初は閉じておく
  * （data-collapsed。開閉は Layout.astro）。項目のキー（digest-item）は付けないので、削除確認の対象にならない
  */
-function newsSection(news) {
+function newsSection(news, review) {
   if (!news?.length) return ""
   return `<!-- digest-news -->
 ## ネットで話題のニュース
@@ -154,10 +154,14 @@ function newsSection(news) {
 <div class="digest-items" data-collapsed="true">
 ${news
   .map(
-    (n) => `<div class="digest-entry digest-entry-news" data-label="${escapeAttr(n.title)}" data-meta="${escapeAttr(`出典 ${n.sources?.length ?? 0}件`)}">
-${newsCard(n)}
+    (n) => {
+      // プレビューでは、確かめきれていない点など note を表示する
+      const note = review && n.note ? `<p class="digest-review-note">⚠️ ${escapeText(n.note)}</p>\n` : ""
+      return `<div class="digest-entry digest-entry-news" data-label="${escapeAttr(n.title)}" data-meta="${escapeAttr(`${note ? "⚠️ " : ""}出典 ${n.sources?.length ?? 0}件`)}">
+${note}${newsCard(n)}
 </div>
-`,
+`
+    },
   )
   .join("")}</div>
 
@@ -210,9 +214,9 @@ export function renderArticle({ date, selection, candidatesByKey, category, fixe
 
 <div class="digest-items">
 ${list
-  .map(({ c, note, overLimit }) => {
+  .map(({ c, note }) => {
     // プレビューでは注意のある項目に印を付け、目次でも分かるようにする
-    const notes = review ? [note, overLimit].filter(Boolean) : []
+    const notes = review && note ? [note] : []
     const meta = `${notes.length ? "⚠️ " : ""}${tocLabel(c).meta}`
     const noteHtml = notes.length ? `<p class="digest-review-note">⚠️ ${escapeText(notes.join(" / "))}</p>\n` : ""
     return `<!-- digest-item ${c.source}:${c.id} -->
@@ -232,7 +236,7 @@ ${noteHtml}${embed(c)}
   return `${frontmatter}
 
 ${review ? reviewBanner(review) : ""}${body}
-${newsSection(selection.news)}
+${newsSection(selection.news, review)}
 ---
 
 この記事は、X・YouTube・SoundCloud・Steam の公開データをもとに AI が掲載候補を選び、筆者が内容を確認したうえで公開しています。掲載した投稿や動画の権利は各投稿者に帰属します。削除や掲載取りやめのご希望は、ブログのお問い合わせ先までご連絡ください。

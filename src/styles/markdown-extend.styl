@@ -267,7 +267,7 @@
     .digest-toc-thumb
       width: 4rem
 
-      &.x
+      &.x, &.soundcloud, &.news
         width: 2.25rem
 
   // 目次・サムネイルの帯の小さな画像
@@ -302,6 +302,22 @@
         font-size: 0.875rem
         font-weight: bold
         opacity: 0.6
+
+    // SoundCloud のアートワークは正方形
+    &.soundcloud
+      aspect-ratio: 1
+
+    // ニュースは画像がないので、アイコンで埋める
+    &.news
+      aspect-ratio: 1
+
+      &:empty::before
+        content: "📰"
+        display: flex
+        align-items: center
+        justify-content: center
+        height: 100%
+        font-size: 1.1rem
 
   // 項目の下のカルーセルのドット。ホバーすると左右のボタンが出て、横に動かせることが分かるカーソルになる
   .digest-strip
@@ -399,24 +415,6 @@
 
     .digest-dot[data-distance="5"]::before
       transform: scale(0.5)
-
-      // ニュースは画像がないので、アイコンで埋める
-      &.news
-        width: 2.25rem
-        aspect-ratio: 1
-
-        &:empty::before
-          content: "📰"
-          display: flex
-          align-items: center
-          justify-content: center
-          height: 100%
-          font-size: 1.1rem
-
-      // SoundCloud のアートワークは正方形
-      &.soundcloud
-        width: 2.25rem
-        aspect-ratio: 1
 
   // 目次の区切り（data-step）の小見出し
   .digest-toc-step

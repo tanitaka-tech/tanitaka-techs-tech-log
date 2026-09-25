@@ -79,7 +79,8 @@ pnpm -s digest render --date <date>
     {
       "title": "出来事の見出し",
       "summary": "何が起きたか・なぜ話題か・今の状況（段落は改行で区切る）",
-      "sources": [{ "label": "出典の名前", "url": "https://..." }]
+      "sources": [{ "label": "出典の名前", "url": "https://..." }],
+      "note": "プレビューにだけ出す注意（公式発表が未確認など）。なければ省く"
     }
   ]
 }
