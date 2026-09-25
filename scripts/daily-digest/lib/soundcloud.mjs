@@ -150,10 +150,14 @@ export async function searchSoundcloudGenre(genre, now = new Date(), drops = {})
 
   const maxAgeDays = genre.maxTrackAgeDays ?? 7
   const requireKana = genre.requireKana ?? true
+  // 曲名・説明・タグ・投稿者名に対する除外の正規表現（AI で作った曲など）。大文字小文字は区別する
+  const exclude = genre.exclude && new RegExp(genre.exclude)
+  const trackText = (t) => [t.title, t.description, t.tag_list, t.genre, t.user?.username, t.user?.full_name].join("\n")
   const tracks = filterWithReasons(
     [...byId.values()],
     [
       ["再生・埋め込み不可", isPlayable],
+      ["除外語", (t) => !exclude || !exclude.test(trackText(t))],
       ["仮名なし", (t) => !requireKana || trackHasKana(t)],
       ["古い曲", (t) => hoursBetween(trackPublishedAt(t), now) <= maxAgeDays * 24],
       ["いいね不足", (t) => (t.likes_count ?? 0) >= (genre.minLikes ?? 0)],
