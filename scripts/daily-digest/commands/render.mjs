@@ -104,6 +104,7 @@ export function render(ctx, { force = false, final = false } = {}) {
     categoryLimit,
     // プレビューで並べ替えた記事は、selection.json の順のまま載せる
     keepOrder: raw.ordered === true,
+    fixedCategories: config.article.fixedCategories ?? [],
     candidatesByKey: new Map([...available].map(([k, e]) => [k, e.c])),
     category: config.article.category,
     fixedTags: config.article.tags ?? [],

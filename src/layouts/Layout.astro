@@ -639,16 +639,15 @@ function renderBluesky() {
 	document.body.appendChild(script)
 }
 
-// デイリーダイジェストのカルーセル。項目数ぶんのドットと前後ボタンを付け、
-// 表示中の項目に合わせて高さを変える（縦に長い埋め込みがあっても他の項目の下が空かないように）
+// デイリーダイジェストのカルーセル。
 // ページのスクロール中にカーソルが目次に乗っても、この時間（ms）以内に続く操作はページのスクロールとして扱う
 const PAGE_WHEEL_CONTINUE_MS = 200
 let lastPageWheel = 0
 document.addEventListener(
 	"wheel",
 	(e) => {
-		// 目次・サムネイルの帯の上での操作は、ページのスクロールとして数えない
-		if (!(e.target instanceof Element && e.target.closest(".digest-toc, .digest-strip"))) lastPageWheel = performance.now()
+		// 目次の上での操作は、ページのスクロールとして数えない
+		if (!(e.target instanceof Element && e.target.closest(".digest-toc"))) lastPageWheel = performance.now()
 	},
 	{ passive: true, capture: true },
 )
@@ -661,13 +660,23 @@ const DIGEST_CHEVRON =
  * カテゴリの見出しに件数と開閉ボタンを付ける。見出しのどこを押しても開閉できる（# のリンクは除く）。
  * initiallyOpen が false なら閉じた状態で表示する（記事末尾のニュースなど）
  */
-function setupDigestHeading(heading: HTMLElement, body: HTMLElement, count: number, initiallyOpen = true) {
+function setupDigestHeading(
+	heading: HTMLElement,
+	body: HTMLElement,
+	count: number,
+	{ open: initiallyOpen = true, collapsible = true } = {},
+) {
 	const section = heading.parentElement
 	const title = heading.firstChild?.textContent?.trim() ?? ""
 	const countLabel = document.createElement("span")
 	countLabel.className = "digest-count"
 	countLabel.textContent = `${count}件`
 	heading.insertBefore(countLabel, heading.querySelector("a.anchor"))
+	// 閉じられないカテゴリ（音楽・MV など。再生中に閉じて止まらないように）は開閉ボタンを付けない
+	if (!collapsible) {
+		heading.classList.add("digest-fixed")
+		return
+	}
 	const toggle = document.createElement("button")
 	toggle.type = "button"
 	toggle.className = "digest-toggle"
@@ -691,53 +700,17 @@ function setupDigestHeading(heading: HTMLElement, body: HTMLElement, count: numb
 
 let digestBodyCount = 0
 
-// ドットの帯で1件送るのに必要なホイールの量（px）。マウスホイールの1ノッチがおよそこの量
-const DIGEST_WHEEL_STEP = 100
-// ドットを一度に見せる数。これより多いときは選択中を中心に一部だけ見せる
-const DIGEST_VISIBLE_DOTS = 11
-
-/**
- * ホイール・トラックパッドの入力を、量に比例した項目の送りに変換する。
- * 操作の始めはすぐに1件送り（軽い操作でも反応するように）、そのあとは DIGEST_WHEEL_STEP ごとに1件ずつ送る。
- * 入力が途切れるか向きが変わったら数え直す
- */
-function createWheelStepper(step: (dir: number) => void) {
-	let lastTime = 0
-	let direction = 0
-	// 次の1件を送るまでにたまった量（操作の向きにそろえた正の値）
-	let amount = 0
-	return (delta: number) => {
-		if (Math.abs(delta) < 1) return
-		const now = performance.now()
-		const dir = Math.sign(delta)
-		const fresh = now - lastTime > 200 || dir !== direction
-		lastTime = now
-		if (fresh) {
-			direction = dir
-			amount = 0
-			step(dir)
-			return
-		}
-		amount += Math.abs(delta)
-		while (amount >= DIGEST_WHEEL_STEP) {
-			step(dir)
-			amount -= DIGEST_WHEEL_STEP
-		}
-	}
-}
+// 縦に長い項目は、この高さで折りたたむ（「全体を見る」で開く）。1件が長いとカルーセル全体が伸びるため
+const DIGEST_TALL_PX = 640
 
 /** container の中で el が中央あたりに来るようにスクロールする */
-function revealIn(container: HTMLElement, el: HTMLElement, axis: "x" | "y", behavior: ScrollBehavior) {
+function revealIn(container: HTMLElement, el: HTMLElement, behavior: ScrollBehavior) {
 	const c = container.getBoundingClientRect()
 	const r = el.getBoundingClientRect()
-	if (axis === "y") {
-		container.scrollTo({ top: container.scrollTop + (r.top - c.top) - (c.height - r.height) / 2, behavior })
-	} else {
-		container.scrollTo({ left: container.scrollLeft + (r.left - c.left) - (c.width - r.width) / 2, behavior })
-	}
+	container.scrollTo({ top: container.scrollTop + (r.top - c.top) - (c.height - r.height) / 2, behavior })
 }
 
-/** 目次・サムネイルの帯に出す小さな画像。画像がない項目（アイコンが取れていない X の投稿など）は CSS で文字を出す */
+/** 目次に出す小さな画像。画像がない項目（アイコンが取れていない X の投稿など）は CSS で文字を出す */
 function digestThumb(entry: HTMLElement) {
 	const thumb = document.createElement("span")
 	thumb.className = `digest-toc-thumb ${entry.className.match(/digest-entry-(\w+)/)?.[1] ?? ""}`
@@ -752,18 +725,71 @@ function digestThumb(entry: HTMLElement) {
 	return thumb
 }
 
+/** 縦に長い項目を折りたたむ。開いた項目（data-expanded）はそのまま */
+function foldIfTall(entry: HTMLElement) {
+	if (entry.dataset.expanded === "true") return
+	const tall = entry.scrollHeight > DIGEST_TALL_PX + 40
+	entry.classList.toggle("digest-tall", tall)
+	let button = entry.querySelector<HTMLButtonElement>(":scope > .digest-unfold")
+	if (!tall || button) return
+	button = document.createElement("button")
+	button.type = "button"
+	button.className = "digest-unfold"
+	button.textContent = "全体を見る ▼"
+	button.addEventListener("click", () => {
+		const open = entry.dataset.expanded !== "true"
+		entry.dataset.expanded = String(open)
+		entry.classList.toggle("digest-tall", !open)
+		button.textContent = open ? "折りたたむ ▲" : "全体を見る ▼"
+	})
+	entry.append(button)
+}
+
+const isMediaEntry = (entry: HTMLElement) => entry.matches(".digest-entry-youtube, .digest-entry-soundcloud")
+
+/** 目次の再生ボタンの表示を、各プレーヤーの再生状態に合わせる */
+function updatePlayButtons() {
+	for (const button of document.querySelectorAll<HTMLElement>(".digest-toc-play")) {
+		const entry = playButtonEntries.get(button)
+		const playing = !!entry && mediaPlayers.some((p) => p.playing && entry.contains(p.frame))
+		button.textContent = playing ? "⏸" : "▶"
+		button.setAttribute("aria-label", playing ? "停止" : "再生")
+	}
+}
+const playButtonEntries = new WeakMap<HTMLElement, HTMLElement>()
+
+/** 項目の動画・曲を再生・停止する。まだプレーヤーになっていなければ、サムネイルを押したのと同じく読み込んで再生する */
+function togglePlay(entry: HTMLElement) {
+	const player = mediaPlayers.find((p) => entry.contains(p.frame))
+	if (player) {
+		if (player.playing) player.pause()
+		else {
+			pauseOthers(player.frame)
+			player.play()
+		}
+		return
+	}
+	entry.querySelector<HTMLElement>(".digest-youtube-facade, .digest-soundcloud-facade")?.click()
+}
+
+/** カルーセルを外から操作するためのもの（プレビューの並べ替えで使う） */
+type DigestList = {
+	entries: HTMLElement[]
+	tabOf: (entry: HTMLElement) => HTMLButtonElement | undefined
+	/** order の順に並べ替える（ページは読み込み直さない） */
+	reorder: (order: HTMLElement[]) => void
+}
+const digestLists = new WeakMap<HTMLElement, DigestList>()
+
 /**
- * デイリーダイジェストの項目一覧。左に選択中の項目とその下のサムネイルの帯、右に目次を表示する。
+ * デイリーダイジェストの項目一覧。左に選択中の項目、右に目次を表示する。
  * - 項目は1件だけ表示し、切り替えは前の項目が縮んで消え、次の項目が少し行き過ぎてから収まるアニメーションにする。
- *   高さは一番高い項目に揃える
- * - 項目の下にカルーセルのドットを並べる。クリック・左右のボタンで選び、ドットの上でのスクロール（縦・横）では
- *   量に比例して送る。端まで行ってもページのスクロールにはしない。ドットが多いときは選択中を中心に一部だけ見せる
- * - 目次は左側と同じ高さにし、長いときは目次の中でスクロールする（スクロールバーはサイトの他の部分と同じ見た目）。
- *   クリック・上下キーで選ぶ
- * - PC では目次の項目にマウスを乗せている間だけプレビューし、離れると元の項目に戻る
- * - スマホでは目次を長押しすると「なぞるモード」になり、指を滑らせるとプレビュー、離したところの項目を選ぶ
- * - 項目に data-step があれば、目次に区切りの小見出しを入れ、ドットでは区切りの境目に間隔を空ける
- * - ページのスクロール中にカーソルが目次・ドットに乗っても、ページをスクロールし続ける
+ *   高さは一番高い項目に揃える。縦に長い項目は DIGEST_TALL_PX で折りたたむ
+ * - 目次は左側と同じ高さにし、長いときは目次の中でスクロールする。クリック・ホバー・上下キーで選ぶ
+ *   （ホバーで選んだときは目次をスクロールしない）
+ * - スマホでは目次を長押しすると「なぞるモード」になり、指の下の項目に切り替えていく
+ * - 動画・曲の項目は、目次の再生ボタンで再生・停止できる。項目を切り替えても再生は止めない
+ * - ページのスクロール中にカーソルが目次に乗っても、ページをスクロールし続ける
  */
 function setupDigestLists() {
 	const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)")
@@ -774,8 +800,6 @@ function setupDigestLists() {
 		panel.dataset.ready = "true"
 		const entries = [...panel.children] as HTMLElement[]
 		if (entries.length === 0) continue
-		const last = entries.length - 1
-		const clamp = (i: number) => Math.max(0, Math.min(last, i))
 
 		// カードの下半分。見出しとの区切り線と一覧を入れ、見出しから開閉できるようにする
 		const body = document.createElement("div")
@@ -792,11 +816,17 @@ function setupDigestLists() {
 		inner.append(content)
 		content.append(divider)
 		const heading = panel.closest("section")?.querySelector<HTMLElement>(":scope > h2")
-		if (heading) setupDigestHeading(heading, body, entries.length, panel.dataset.collapsed !== "true")
-		const hasMedia = entries.some((e) => e.matches(".digest-entry-youtube, .digest-entry-soundcloud"))
+		if (heading) {
+			setupDigestHeading(heading, body, entries.length, {
+				open: panel.dataset.collapsed !== "true",
+				collapsible: panel.dataset.fixed !== "true",
+			})
+		}
+		const hasMedia = entries.some(isMediaEntry)
 		if (entries.length < 2) {
 			content.append(panel)
 			if (hasMedia) content.append(createVolumeControl())
+			for (const entry of entries) foldIfTall(entry)
 			continue
 		}
 
@@ -804,30 +834,19 @@ function setupDigestLists() {
 		wrap.className = "digest-browser"
 		const main = document.createElement("div")
 		main.className = "digest-main"
-		const strip = document.createElement("div")
-		strip.className = "digest-strip"
-		strip.setAttribute("aria-label", "項目の切り替え")
 		const toc = document.createElement("div")
 		toc.className = "digest-toc"
 		toc.setAttribute("role", "tablist")
 		toc.setAttribute("aria-orientation", "vertical")
 		content.append(wrap)
 		wrap.append(main, toc)
-		main.append(panel, strip)
+		main.append(panel)
 		// 動画・曲のあるカルーセルには、表示中の項目に関係なく音量のスライダーを常に出す
 		if (hasMedia) main.append(createVolumeControl())
 		panel.classList.add("switching")
 
-		let lastStep = ""
+		const tabByEntry = new Map<HTMLElement, HTMLButtonElement>()
 		const tabs = entries.map((entry, i) => {
-			const step = entry.dataset.step ?? ""
-			if (step && step !== lastStep) {
-				const stepHeading = document.createElement("div")
-				stepHeading.className = "digest-toc-step"
-				stepHeading.textContent = step
-				toc.append(stepHeading)
-			}
-			lastStep = step
 			const tab = document.createElement("button")
 			tab.type = "button"
 			tab.setAttribute("role", "tab")
@@ -841,38 +860,34 @@ function setupDigestLists() {
 			meta.textContent = entry.dataset.meta ?? ""
 			text.append(label, meta)
 			tab.append(digestThumb(entry), text)
-			tab.addEventListener("click", () => commit(i))
-			if (canHover.matches) tab.addEventListener("mouseenter", () => hoverSelect(i))
+			// 並べ替えで位置が変わるので、番号ではなくその時点の位置で選ぶ
+			tab.addEventListener("click", () => commit(tabs.indexOf(tab)))
+			if (canHover.matches) tab.addEventListener("mouseenter", () => hoverSelect(tabs.indexOf(tab)))
+			if (isMediaEntry(entry)) {
+				// 目次から再生・停止できるボタン（ボタンの中にボタンは置けないので span にする）
+				const play = document.createElement("span")
+				play.className = "digest-toc-play"
+				play.setAttribute("role", "button")
+				play.tabIndex = 0
+				playButtonEntries.set(play, entry)
+				const onPlay = (e: Event) => {
+					e.stopPropagation()
+					e.preventDefault()
+					commit(tabs.indexOf(tab), false)
+					togglePlay(entry)
+				}
+				play.addEventListener("click", onPlay)
+				play.addEventListener("keydown", (e) => {
+					if (e.key === "Enter" || e.key === " ") onPlay(e)
+				})
+				tab.append(play)
+			}
 			entry.setAttribute("role", "tabpanel")
 			toc.append(tab)
+			tabByEntry.set(entry, tab)
 			return tab
 		})
-		const button = (className: string, label: string, text: string, onClick: () => void) => {
-			const btn = document.createElement("button")
-			btn.type = "button"
-			btn.className = className
-			btn.setAttribute("aria-label", label)
-			btn.textContent = text
-			btn.addEventListener("click", onClick)
-			return btn
-		}
-		const dots = entries.map((entry, i) => {
-			const dot = button("digest-dot", `${i + 1}件目: ${entry.dataset.label ?? ""}`, "", () => commit(i))
-			dot.title = entry.dataset.label ?? ""
-			// 区切り（data-step）の境目に間隔を空ける
-			if (i > 0 && (entry.dataset.step ?? "") !== (entries[i - 1].dataset.step ?? "")) dot.classList.add("step-start")
-			return dot
-		})
-		const dotList = document.createElement("div")
-		dotList.className = "digest-dots"
-		dotList.append(...dots)
-		const prev = button("digest-strip-arrow", "前へ", "‹", () => commit(active - 1))
-		const next = button("digest-strip-arrow", "次へ", "›", () => commit(active + 1))
-		const count = document.createElement("span")
-		count.className = "digest-strip-count"
-		const many = entries.length > DIGEST_VISIBLE_DOTS
-		strip.classList.toggle("many", many)
-		strip.append(prev, dotList, next, ...(many ? [count] : []))
+		updatePlayButtons()
 
 		// 目次のスクロールバーを、ページ全体やコードブロックと同じ見た目にする
 		const tocViewport = OverlayScrollbars(toc, {
@@ -881,34 +896,31 @@ function setupDigestLists() {
 		}).elements().viewport
 
 		// 表示中の項目。前の項目は縮んで消え、次の項目は少し行き過ぎてから収まる
-		let shown = -1
+		let shown: HTMLElement | undefined
 		let lastSwitch = 0
-		const show = (i: number) => {
-			if (i === shown) return
-			const from = entries[shown]
-			const to = entries[i]
-			const dir = Math.sign(i - shown) || 1
+		const show = (to: HTMLElement) => {
+			if (to === shown) return
+			const from = shown
+			const dir = Math.sign(entries.indexOf(to) - (from ? entries.indexOf(from) : -1)) || 1
 			for (const el of [from, to]) for (const a of el?.getAnimations() ?? []) a.cancel()
 			from?.classList.remove("active", "leaving")
 			to.classList.add("active")
 			// 速く次々に切り替わるときや、初回表示ではアニメーションしない
 			const now = performance.now()
-			const animate = shown !== -1 && now - lastSwitch > 90 && !reduceMotion.matches
-			shown = i
+			const animate = !!from && now - lastSwitch > 90 && !reduceMotion.matches
+			shown = to
 			lastSwitch = now
-			if (!animate) return
-			if (from) {
-				from.classList.add("leaving")
-				const leave = from.animate(
-					[
-						{ opacity: 1, transform: "none" },
-						{ opacity: 0, transform: `translateY(${-dir * 14}px) scale(0.94)` },
-					],
-					{ duration: 150, easing: "cubic-bezier(0.4, 0, 1, 1)" },
-				)
-				const done = () => from.classList.remove("leaving")
-				leave.finished.then(done, done)
-			}
+			if (!animate || !from) return
+			from.classList.add("leaving")
+			const leave = from.animate(
+				[
+					{ opacity: 1, transform: "none" },
+					{ opacity: 0, transform: `translateY(${-dir * 14}px) scale(0.94)` },
+				],
+				{ duration: 150, easing: "cubic-bezier(0.4, 0, 1, 1)" },
+			)
+			const done = () => from.classList.remove("leaving")
+			leave.finished.then(done, done)
 			to.animate(
 				[
 					{ opacity: 0, transform: `translateY(${dir * 28}px) scale(0.92)` },
@@ -919,39 +931,30 @@ function setupDigestLists() {
 			)
 		}
 
-		// 選択中の項目。目次にホバーしたときも、その項目に切り替える
+		// 選択中の項目。目次にホバーしたときも、その項目に切り替える。
+		// 項目を切り替えても、再生中の動画・曲は止めない（別の項目を再生したときに止まる）
 		let active = -1
 		// 選んだ直後は、目次が自動でスクロールして止まっているカーソルの下に別の項目が来るので、
 		// マウスが実際に動くまではホバーで切り替えない
 		let hoverLocked = false
-		// reveal: 選んだ項目が見えるよう目次・ドットをスクロールするか（ホバーで選んだときは、
-		// カーソルの下の目次が動くと使いにくいのでスクロールしない）
+		const markSelected = () => {
+			tabs.forEach((tab, j) => {
+				tab.setAttribute("aria-selected", String(j === active))
+				tab.tabIndex = j === active ? 0 : -1
+			})
+		}
+		// reveal: 選んだ項目が見えるよう目次をスクロールするか（ホバーで選んだときは、カーソルの下の目次が動くと
+		// 使いにくいのでスクロールしない）
 		const commit = (index: number, reveal = true) => {
-			const i = clamp(index)
+			if (index === -1) return
+			const i = Math.max(0, Math.min(entries.length - 1, index))
 			hoverLocked = true
 			if (i !== active) {
-				// 見えなくなる項目の動画は止める
-				const previous = entries[active]
-				if (previous) {
-					for (const { frame, pause } of mediaPlayers) if (previous.contains(frame)) pause()
-				}
 				active = i
-				tabs.forEach((tab, j) => {
-					tab.setAttribute("aria-selected", String(j === i))
-					tab.tabIndex = j === i ? 0 : -1
-				})
-				dots.forEach((dot, j) => {
-					dot.setAttribute("aria-current", String(j === i))
-					// 中心から離れたドットほど小さくする（CSS で参照）
-					dot.dataset.distance = String(Math.min(Math.abs(j - i), 5))
-				})
-				prev.disabled = i === 0
-				next.disabled = i === last
-				count.textContent = `${i + 1} / ${entries.length}`
-				if (reveal) revealIn(tocViewport, tabs[i], "y", scrollBehavior())
-				if (many) revealIn(dotList, dots[i], "x", scrollBehavior())
+				markSelected()
+				if (reveal) revealIn(tocViewport, tabs[i], scrollBehavior())
 			}
-			show(i)
+			show(entries[i])
 		}
 		const hoverSelect = (i: number) => {
 			if (!hoverLocked) commit(i, false)
@@ -964,51 +967,38 @@ function setupDigestLists() {
 			if (!hoverLocked || !moved) return
 			hoverLocked = false
 			// ロック中に乗った項目は mouseenter が済んでいるので、ここで切り替える
-			const target = e.target instanceof Element ? e.target.closest("button") : null
+			const target = e.target instanceof Element ? e.target.closest("[role=tab]") : null
 			const i = target ? tabs.indexOf(target as HTMLButtonElement) : -1
 			if (i !== -1 && i !== active) commit(i, false)
 		})
 
-		// ページのスクロールの途中でカーソルが目次・ドットに乗っただけなら、そのままページをスクロールする
-		const continuePageScroll = (e: WheelEvent) => {
-			const now = performance.now()
-			if (now - lastPageWheel > PAGE_WHEEL_CONTINUE_MS) return false
-			lastPageWheel = now
-			e.preventDefault()
-			window.scrollBy({ top: e.deltaY * (e.deltaMode === 1 ? 16 : 1), behavior: "instant" })
-			return true
-		}
-		toc.addEventListener("wheel", continuePageScroll, { passive: false })
-
-		// ドットの上でのホイール・トラックパッド（縦・横どちらでも）は量に比例して送る。
-		// 端まで行ってもページのスクロールにはせず、ドットの上ではページを動かさない
-		const onWheel = createWheelStepper((dir) => commit(active + dir))
-		strip.addEventListener(
+		// ページのスクロールの途中でカーソルが目次に乗っただけなら、そのままページをスクロールする
+		toc.addEventListener(
 			"wheel",
 			(e) => {
-				if (continuePageScroll(e)) return
+				const now = performance.now()
+				if (now - lastPageWheel > PAGE_WHEEL_CONTINUE_MS) return
+				lastPageWheel = now
 				e.preventDefault()
-				onWheel((Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY) * (e.deltaMode === 1 ? 16 : 1))
+				window.scrollBy({ top: e.deltaY * (e.deltaMode === 1 ? 16 : 1), behavior: "instant" })
 			},
 			{ passive: false },
 		)
 
-		const onKey = (e: KeyboardEvent) => {
+		toc.addEventListener("keydown", (e) => {
 			const next = {
 				ArrowDown: active + 1,
 				ArrowRight: active + 1,
 				ArrowUp: active - 1,
 				ArrowLeft: active - 1,
 				Home: 0,
-				End: last,
+				End: entries.length - 1,
 			}[e.key]
 			if (next === undefined) return
 			e.preventDefault()
 			commit(next)
-			;(e.currentTarget === strip ? dots : tabs)[active].focus({ preventScroll: true })
-		}
-		toc.addEventListener("keydown", onKey)
-		strip.addEventListener("keydown", onKey)
+			tabs[active].focus({ preventScroll: true })
+		})
 
 		// スマホのなぞるモード。長押しで始まり、指の下の項目に切り替えていく。
 		// 長押しの前に指が動いたら、普通の目次のスクロールとして扱う
@@ -1059,8 +1049,9 @@ function setupDigestLists() {
 		toc.addEventListener("touchend", endScrub)
 		toc.addEventListener("touchcancel", endScrub)
 
-		// 項目の高さを一番高い項目に揃える（埋め込みの読み込みで高さが変わるたびに更新）
+		// 項目の高さを一番高い項目に揃える（埋め込みの読み込みで高さが変わるたびに更新）。縦に長い項目は折りたたむ
 		const resize = () => {
+			for (const entry of entries) foldIfTall(entry)
 			const height = Math.max(...entries.map((entry) => entry.offsetHeight))
 			wrap.style.setProperty("--digest-height", `${height}px`)
 		}
@@ -1068,12 +1059,33 @@ function setupDigestLists() {
 		for (const entry of entries) observer.observe(entry)
 		resize()
 		commit(0)
+
+		digestLists.set(panel, {
+			entries,
+			tabOf: (entry) => tabByEntry.get(entry),
+			reorder: (order) => {
+				const current = entries[active]
+				entries.splice(0, entries.length, ...order)
+				tabs.splice(0, tabs.length, ...order.map((e) => tabByEntry.get(e) as HTMLButtonElement))
+				panel.append(...entries)
+				tabs[0]?.parentElement?.append(...tabs)
+				active = entries.indexOf(current)
+				markSelected()
+			},
+		})
 	}
 }
 
 // YouTube・SoundCloud は最初サムネイルだけを表示し、クリックでプレーヤーに差し替える。
 // 1本再生したら他（YouTube と SoundCloud の両方）を一時停止する
-let mediaPlayers: { frame: HTMLIFrameElement; pause: () => void; setVolume: (volume: number) => void }[] = []
+type MediaPlayer = {
+	frame: HTMLIFrameElement
+	playing: boolean
+	play: () => void
+	pause: () => void
+	setVolume: (volume: number) => void
+}
+let mediaPlayers: MediaPlayer[] = []
 const pauseOthers = (frame?: HTMLIFrameElement) => {
 	for (const other of mediaPlayers) if (other.frame !== frame) other.pause()
 }
@@ -1154,20 +1166,26 @@ function setupYoutube() {
 			withYouTubeApi(() => {
 				const YT = window.YT
 				if (!YT) return
+				const entry: MediaPlayer = {
+					frame: iframe,
+					playing: false,
+					play: () => player.playVideo?.(),
+					pause: () => player.pauseVideo?.(),
+					setVolume: (v) => player.setVolume?.(v),
+				}
 				const player = new YT.Player(iframe, {
 					events: {
 						onReady: () => player.setVolume?.(mediaVolume()),
 						onStateChange: (event) => {
-							if (event.data !== YT.PlayerState.PLAYING) return
-							pauseOthers(iframe)
+							// 目次の再生ボタンの表示に使う
+							// 読み込み中（3: BUFFERING）も再生中として扱い、ボタンの表示がちらつかないようにする
+							entry.playing = event.data === YT.PlayerState.PLAYING || event.data === 3
+							updatePlayButtons()
+							if (entry.playing) pauseOthers(iframe)
 						},
 					},
 				})
-				mediaPlayers.push({
-					frame: iframe,
-					pause: () => player.pauseVideo?.(),
-					setVolume: (v) => player.setVolume?.(v),
-				})
+				mediaPlayers.push(entry)
 			})
 		})
 	}
@@ -1206,9 +1224,38 @@ function mountSoundcloud(facade: HTMLAnchorElement, autoPlay: boolean) {
 		const SC = window.SC
 		if (!SC) return
 		const widget = SC.Widget(iframe)
-		widget.bind(SC.Widget.Events.READY, () => widget.setVolume(mediaVolume()))
-		widget.bind(SC.Widget.Events.PLAY, () => pauseOthers(iframe))
-		mediaPlayers.push({ frame: iframe, pause: () => widget.pause(), setVolume: (v) => widget.setVolume(v) })
+		// 準備ができる前に再生を押されたら、準備ができたところで再生する（それまでの play は無視されるため）
+		let ready = false
+		let playWhenReady = false
+		const entry: MediaPlayer = {
+			frame: iframe,
+			playing: false,
+			play: () => {
+				if (ready) widget.play()
+				else playWhenReady = true
+			},
+			pause: () => {
+				playWhenReady = false
+				widget.pause()
+			},
+			setVolume: (v) => widget.setVolume(v),
+		}
+		const setPlaying = (playing: boolean) => {
+			entry.playing = playing
+			updatePlayButtons()
+		}
+		widget.bind(SC.Widget.Events.READY, () => {
+			ready = true
+			widget.setVolume(mediaVolume())
+			if (playWhenReady) widget.play()
+		})
+		widget.bind(SC.Widget.Events.PLAY, () => {
+			setPlaying(true)
+			pauseOthers(iframe)
+		})
+		widget.bind(SC.Widget.Events.PAUSE, () => setPlaying(false))
+		widget.bind(SC.Widget.Events.FINISH, () => setPlaying(false))
+		mediaPlayers.push(entry)
 	})
 }
 
@@ -1242,8 +1289,10 @@ function setupSoundcloud() {
 }
 
 /**
- * プレビューの記事（先頭に .digest-review-banner がある）で、項目ごとに採用・不採用を切り替えるトグルを付ける。
- * 切り替えると開発サーバーの API（scripts/daily-digest/dev-review.mjs）が selection.json に保存する。
+ * プレビューの記事（先頭に .digest-review-banner がある）で、目次から採用・不採用の切り替えと並べ替えをする。
+ * - 目次の ✅ / ⛔ を押すと採用・不採用が切り替わる
+ * - 目次の項目をドラッグすると並べ替わる（ページは読み込み直さない）
+ * どちらも開発サーバーの API（scripts/daily-digest/dev-review.mjs）が selection.json に保存する。
  * 公開する記事にはバナーがないので何もしない
  */
 async function setupDigestReview() {
@@ -1251,46 +1300,38 @@ async function setupDigestReview() {
 	if (!banner || banner.dataset.ready) return
 	banner.dataset.ready = "true"
 	const date = banner.dataset.date ?? ""
-	// 記事を書き出したあとに切り替えた分もあるので、保存済みの状態を読み直す（読めなければ記事の中の値）
-	let saved: Record<string, boolean> = {}
+	// 記事を書き出したあとに切り替え・並べ替えた分もあるので、保存済みの状態を読み直す（読めなければ記事の中の値）
+	let saved: { adopt: Record<string, boolean>; order: string[] } = { adopt: {}, order: [] }
 	try {
 		const res = await fetch(`/__digest/selection?date=${date}`)
-		if (res.ok) saved = (await res.json()).adopt ?? {}
+		if (res.ok) saved = { adopt: {}, order: [], ...(await res.json()) }
 	} catch {}
 	const status = document.createElement("p")
 	status.className = "digest-review-status"
 	banner.append(status)
-	// 並べ替えると記事を書き出し直して読み込み直すので、元のスクロール位置に戻す
-	try {
-		const y = sessionStorage.getItem("digest-review-scroll")
-		if (y !== null) {
-			sessionStorage.removeItem("digest-review-scroll")
-			window.scrollTo({ top: Number(y), behavior: "instant" })
-		}
-	} catch {}
-	/** keys の順に並べ替えて保存する。開発サーバーが記事を書き出し直すので、読み込み直す */
-	const saveOrder = async (keys: string[]) => {
-		status.textContent = "並べ替えを保存しています…"
-		try {
-			const res = await fetch("/__digest/order", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ date, keys }),
-			})
-			if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`)
-			try {
-				sessionStorage.setItem("digest-review-scroll", String(window.scrollY))
-			} catch {}
-			location.reload()
-		} catch (e) {
-			status.textContent = `並べ替えを保存できませんでした（pnpm dev で開いていますか？）: ${e instanceof Error ? e.message : e}`
-		}
+	const post = async (path: string, body: object) => {
+		const res = await fetch(path, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ date, ...body }),
+		})
+		if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`)
+	}
+	const fail = (what: string, e: unknown) => {
+		status.textContent = `${what}を保存できませんでした（pnpm dev で開いていますか？）: ${e instanceof Error ? e.message : e}`
 	}
 
 	for (const panel of document.querySelectorAll<HTMLElement>(".digest-items[data-limit]")) {
-		const entries = [...panel.querySelectorAll<HTMLElement>(":scope > .digest-entry[data-key]")]
+		const list = digestLists.get(panel)
+		const entries = list?.entries ?? [...panel.querySelectorAll<HTMLElement>(":scope > .digest-entry[data-key]")]
+		const keyOf = (entry: HTMLElement) => entry.dataset.key ?? ""
+		// 保存済みの順に並べ直す
+		if (list && saved.order.length) {
+			const rank = new Map(saved.order.map((k, i) => [k, i]))
+			const sorted = [...entries].sort((a, b) => (rank.get(keyOf(a)) ?? 1e9) - (rank.get(keyOf(b)) ?? 1e9))
+			if (sorted.some((e, i) => e !== entries[i])) list.reorder(sorted)
+		}
 		const section = panel.closest("section")
-		const tabs = [...(section?.querySelectorAll<HTMLElement>(".digest-toc [role=tab]") ?? [])]
 		const limit = Number(panel.dataset.limit)
 		const counter = document.createElement("span")
 		counter.className = "digest-review-count"
@@ -1300,102 +1341,86 @@ async function setupDigestReview() {
 			counter.textContent = `採用 ${n} / 上限 ${limit}`
 			counter.classList.toggle("over", n > limit)
 		}
-		const keys = entries.map((e) => e.dataset.key ?? "")
-		/** from 番目の項目を to 番目に動かした順で保存する */
-		const move = (from: number, to: number) => {
-			if (from === to || to < 0 || to >= keys.length) return
-			const next = [...keys]
-			next.splice(to, 0, ...next.splice(from, 1))
-			saveOrder(next)
-		}
-		// 目次の項目はドラッグで並べ替えられる
-		let dragging = -1
-		tabs.forEach((tab, i) => {
+
+		for (const entry of entries) {
+			const tab = list?.tabOf(entry)
+			const key = keyOf(entry)
+			// 目次の ✅ / ⛔。押すと採用・不採用を切り替える（ボタンの中にボタンは置けないので span）
+			const badge = document.createElement("span")
+			badge.className = "digest-review-badge"
+			badge.setAttribute("role", "button")
+			badge.tabIndex = 0
+			tab?.append(badge)
+			const apply = (adopt: boolean) => {
+				entry.dataset.adopt = String(adopt)
+				tab?.classList.toggle("digest-rejected", !adopt)
+				badge.textContent = adopt ? "✅" : "⛔"
+				badge.setAttribute("aria-label", adopt ? "採用（押すと不採用）" : "不採用（押すと採用）")
+				updateCount()
+			}
+			apply(key in saved.adopt ? saved.adopt[key] : entry.dataset.adopt !== "false")
+			const onToggle = async (e: Event) => {
+				e.stopPropagation()
+				e.preventDefault()
+				const adopt = entry.dataset.adopt === "false"
+				try {
+					await post("/__digest/adopt", { key, adopt })
+					apply(adopt)
+					status.textContent = `保存しました: ${entry.dataset.label ?? key} を${adopt ? "採用" : "不採用"}`
+				} catch (err) {
+					fail("採用", err)
+				}
+			}
+			badge.addEventListener("click", onToggle)
+			badge.addEventListener("keydown", (e) => {
+				if (e.key === "Enter" || e.key === " ") onToggle(e)
+			})
+
+			// 目次の項目のドラッグで並べ替える
+			if (!tab || !list) continue
 			tab.draggable = true
 			tab.addEventListener("dragstart", (e) => {
-				dragging = i
-				e.dataTransfer?.setData("text/plain", keys[i])
+				dragging = entry
+				e.dataTransfer?.setData("text/plain", key)
 				tab.classList.add("digest-dragging")
 			})
 			tab.addEventListener("dragend", () => {
+				dragging = undefined
 				tab.classList.remove("digest-dragging")
-				for (const t of tabs) t.classList.remove("digest-drop-before", "digest-drop-after")
+				for (const e of entries) list.tabOf(e)?.classList.remove("digest-drop-before", "digest-drop-after")
 			})
+			// カーソルが項目の上半分なら前に、下半分なら後ろに入れる（offsetY は子要素の中の位置になるので使わない）
+			const isAfter = (e: DragEvent) => {
+				const r = tab.getBoundingClientRect()
+				return e.clientY > r.top + r.height / 2
+			}
 			tab.addEventListener("dragover", (e) => {
-				if (dragging === -1) return
+				if (!dragging || !entries.includes(dragging)) return
 				e.preventDefault()
-				const after = e.offsetY > tab.offsetHeight / 2
+				const after = isAfter(e)
 				tab.classList.toggle("digest-drop-before", !after)
 				tab.classList.toggle("digest-drop-after", after)
 			})
 			tab.addEventListener("dragleave", () => tab.classList.remove("digest-drop-before", "digest-drop-after"))
-			tab.addEventListener("drop", (e) => {
-				if (dragging === -1) return
+			tab.addEventListener("drop", async (e) => {
+				const moving = dragging
+				if (!moving || !entries.includes(moving) || moving === entry) return
 				e.preventDefault()
-				const after = e.offsetY > tab.offsetHeight / 2
-				// 自分より後ろに落とすときは、抜いたぶん1つ前にずれる
-				let to = i + (after ? 1 : 0)
-				if (dragging < to) to -= 1
-				const from = dragging
-				dragging = -1
-				move(from, to)
-			})
-		})
-		entries.forEach((entry, i) => {
-			const key = entry.dataset.key ?? ""
-			const button = document.createElement("button")
-			button.type = "button"
-			button.className = "digest-review-toggle"
-			const badge = document.createElement("span")
-			badge.className = "digest-review-badge"
-			tabs[i]?.append(badge)
-			const apply = (adopt: boolean) => {
-				entry.dataset.adopt = String(adopt)
-				tabs[i]?.classList.toggle("digest-rejected", !adopt)
-				button.textContent = adopt ? "✅ 採用" : "⛔ 不採用"
-				button.setAttribute("aria-pressed", String(adopt))
-				badge.textContent = adopt ? "✅" : "⛔"
-				updateCount()
-			}
-			apply(key in saved ? saved[key] : entry.dataset.adopt !== "false")
-			button.addEventListener("click", async () => {
-				const adopt = entry.dataset.adopt === "false"
-				button.disabled = true
+				const after = isAfter(e)
+				const next = entries.filter((x) => x !== moving)
+				next.splice(next.indexOf(entry) + (after ? 1 : 0), 0, moving)
+				list.reorder(next)
 				try {
-					const res = await fetch("/__digest/adopt", {
-						method: "POST",
-						headers: { "Content-Type": "application/json" },
-						body: JSON.stringify({ date, key, adopt }),
-					})
-					if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`)
-					apply(adopt)
-					status.textContent = `保存しました: ${entry.dataset.label ?? key} を${adopt ? "採用" : "不採用"}`
-				} catch (e) {
-					status.textContent = `保存できませんでした（pnpm dev で開いていますか？）: ${e instanceof Error ? e.message : e}`
-				} finally {
-					button.disabled = false
+					await post("/__digest/order", { keys: next.map(keyOf) })
+					status.textContent = `並べ替えを保存しました: ${moving.dataset.label ?? ""}`
+				} catch (err) {
+					fail("並べ替え", err)
 				}
 			})
-			// 前後に1つずつ動かすボタン（ドラッグできない端末でも並べ替えられるように）
-			const up = document.createElement("button")
-			up.type = "button"
-			up.className = "digest-review-move"
-			up.textContent = "↑ 前へ"
-			up.disabled = i === 0
-			up.addEventListener("click", () => move(i, i - 1))
-			const down = document.createElement("button")
-			down.type = "button"
-			down.className = "digest-review-move"
-			down.textContent = "↓ 後ろへ"
-			down.disabled = i === entries.length - 1
-			down.addEventListener("click", () => move(i, i + 1))
-			const bar = document.createElement("div")
-			bar.className = "digest-review-bar"
-			bar.append(up, down, button)
-			entry.prepend(bar)
-		})
+		}
 	}
 }
+let dragging: HTMLElement | undefined
 
 function renderDigest() {
 	// ページ遷移で前のページの動画は消えている
