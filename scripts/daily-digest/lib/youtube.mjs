@@ -78,7 +78,7 @@ export function toYoutubeCandidate(v, genre, now = new Date()) {
     title: v.snippet.title,
     thumbnail: bestThumbnail(v.snippet.thumbnails),
     text: (v.snippet.description ?? "").slice(0, 400),
-    author: { name: v.snippet.channelTitle, handle: v.snippet.channelId },
+    author: { id: v.snippet.channelId, name: v.snippet.channelTitle, handle: v.snippet.channelId },
     publishedAt: publishedAt.toISOString(),
     metrics: {
       views: Number(v.statistics?.viewCount ?? 0),

@@ -36,46 +36,75 @@ draft: false
 
 ## デイリーダイジェスト（自動生成記事）
 
-X・YouTube・Steam からその日（JST）に伸びた投稿を集め、LLM（Claude・GPT・Gemini のうち使えるもの）が掲載する投稿を選び、カテゴリごとに埋め込みをカルーセルで並べた記事の下書きを作ります。公開前に必ず人間がレビューし、PR をマージしたときだけ公開されます。
+X・YouTube・Steam からその日（JST）に伸びた投稿を集め、カテゴリごとに埋め込みをカルーセルで並べた記事を作ります。候補の確認・ブロック・重みづけ・添削は手元で Claude Code と会話しながら行い、確認が済んだものだけを PR 経由で公開します。
 
 - 出力先: `src/content/posts/daily-digest/YYYY-MM-DD.md`
 - 生成記事には `自動生成` タグが付きます（手書きの記事と区別するため）
 - 設定（検索キーワード・X の読み取り上限・掲載件数など）: `scripts/daily-digest/config.yaml`
+- 人間の判断（ブロック・重みづけ・推し）: `scripts/daily-digest/curation.yaml`
+- 選定基準・タイトルの付け方: `scripts/daily-digest/selection-guide.md`
 - 投稿本文などの生データは `.digest-cache/` に保存され、コミットされません
+
+### 作り方（Claude Code）
+
+```sh
+cp .env.example .env   # X_BEARER_TOKEN / YOUTUBE_API_KEY を記入
+```
+
+Claude Code で `/digest`（日付を指定するなら `/digest 2026-09-25`）を実行すると、次の順に進みます。
+
+1. **収集**: 候補を集めて `.digest-cache/<date>/` に保存する。X は従量課金なので、保存済みなら取り直さない
+2. **確認**: `curation.yaml` を適用した候補を番号付きで見せる。Claude がおすすめ（✅）と気になる点（⚠️）を付けるが、除外はしない
+3. **重みづけ**: 「#3 の人ブロック」「VTuber 少し強めに」「#9 は推し」などと指示すると、`curation.yaml` にルールが追加される。「今回だけ外して」は選定だけを直す
+4. **選定・添削**: 選んだ項目とタイトル・説明を `selection.json` に書いて記事を生成し、`pnpm dev` でプレビューする。タイトルや項目の直しも会話で指示する
+5. **公開**: 「公開して」と伝えると、記事と `curation.yaml` をコミットして PR を作り、CI が通ったらマージする（develop へのマージで公開）
+
+### curation.yaml
+
+| action | 効果 |
+|---|---|
+| `block` | 候補から外す |
+| `weight` | スコアに倍率を掛ける（当たったルールの倍率はすべて掛け合わせる） |
+| `pin` | スコアや block に関係なく候補一覧に必ず残す |
+| `ignore-sharer` | X で YouTube を貼ったアカウントを共有者数に数えない（宣伝・bot 対策） |
+
+条件（`match`）には個別の投稿（`key`）、投稿者（`author`。X はユーザーID、YouTube はチャンネルID）、ジャンル（`genre`）、本文の正規表現（`text`）を書けます。複数書くとすべてを満たす候補に当たります。`reason` と `added` は必須で、`until` を書くとその日を過ぎたら効かなくなります。ルールは記事と一緒にコミットされるので、git の履歴で経緯を追えます。
+
+### コマンド
+
+`/digest` スキルは次のコマンドを順に呼んでいます。手で実行することもできます（`--date` を省くと今日）。
+
+```sh
+pnpm digest collect --date 2026-09-25         # 候補を集める（--force で取り直し、--x-limit 100 で X の読み取りを抑える）
+pnpm digest review --date 2026-09-25          # 候補一覧（--all で除外・圏外も表示）
+pnpm digest curate block author:#3 --reason 懸賞アカウント
+pnpm digest curate weight genre:vtuber 1.5 --reason 好み --until 2026-10-31
+pnpm digest curate pin '#9' --reason 推し
+pnpm digest curate ignore-sharer @someone --reason bot
+pnpm digest curate unset genre:vtuber         # 同じ条件のルールを消す
+pnpm digest curate list                       # ルールの一覧
+pnpm digest select --llm                      # API の LLM に selection.json を作らせる（任意。API キーが必要）
+pnpm digest select --mock                     # スコア上位を機械的に選ぶ（動作確認用）
+pnpm digest render --date 2026-09-25          # selection.json から記事を書き出す
+pnpm digest publish --date 2026-09-25         # build → PR 作成 → CI 通過後にマージ（--no-merge で PR だけ）
+pnpm digest:check-deleted                     # 削除・非公開になった掲載項目を記事から取り除く
+```
+
+curate の対象は `#3`（候補）、`author:#3`（候補の投稿者）、`x:123` / `youtube:abc`（キー）、`author:x:<ユーザーID>`、`genre:<ジャンルID>`、`text:<正規表現>` で指定します。`--genre <ジャンルID>` を付けると、そのジャンルの中だけで効くルールになります。候補の番号は日付ごとに固定されるので、ルールを足して並びが変わっても同じ番号で指定できます。
+
+`collect --fixture <candidates.json>` を使うと、保存済みの候補データで API を呼ばずに試せます。
 
 ### 音楽・動画の集め方
 
 YouTube を再生数順に検索するだけだと海外の大型コンテンツばかりになるので、次の3つで日本のオタク界隈の曲・動画に寄せています。
 
 - **仮名フィルタと検索の分割**: タイトルかチャンネル名に仮名がある動画だけを残し（`youtube.requireKana`）、アニソン・ボカロ・VTuber などを別々に検索して候補を確保する。記事では1つのカルーセルにまとめ、上部の区切り（`step`）で切り替えられる。区切りの中はスコア順
-- **X での共有者数**（`x-music`）: X で YouTube リンクを貼ったアカウントの数（重複なし）で並べる
+- **X での共有者数**（`x-music`）: X で YouTube リンクを貼ったアカウントの数（重複なし）で並べる。宣伝や bot のアカウントは `ignore-sharer` で数えないようにできる
 - **X リスト**（`x-list-music`）: 自分で作った公開リストのメンバーが貼った動画を拾う。`config.yaml` の `listId` にリストの ID（`x.com/i/lists/<ID>`）を入れると有効になり、以降はリストのメンバーを編集するだけで好みを調整できる
 
-### ローカルで実行
+### 削除された投稿の確認
 
-```sh
-cp .env.example .env   # X_BEARER_TOKEN / YOUTUBE_API_KEY と、LLM の API キー（1つ以上）を記入
-
-pnpm digest                        # 今日分を生成
-pnpm digest --date 2026-09-25      # 対象日を指定
-pnpm digest --x-limit 100          # X の読み取り件数を抑えて試す（80以上推奨）
-pnpm digest --llm gemini,openai    # 使う LLM と順番を指定（既定は config.yaml の llm.providers 順）
-pnpm digest --mock-llm             # LLM を呼ばずに収集と記事の組み立てだけ試す
-pnpm digest --fixture .digest-cache/2026-09-25/candidates.json --selection selection.json
-                                   # 収集済みの候補と手書きの選定結果から記事を作る
-pnpm digest:check-deleted          # 削除・非公開になった掲載項目を記事から取り除く
-pnpm dev                           # 生成された記事を確認
-```
-
-### GitHub Actions で実行
-
-リポジトリの Secrets に `X_BEARER_TOKEN` / `YOUTUBE_API_KEY` と、`ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `GEMINI_API_KEY` のいずれか（複数あればフォールバックに使われる）を登録し、Settings → Actions → General で「Allow GitHub Actions to create and approve pull requests」を有効にしておきます。
-
-1. Actions → **Daily Digest** → Run workflow（対象日は空なら今日）
-2. `auto-digest` ラベル付きの PR が作られるので、チェックリストに沿ってレビュー
-3. マージすると公開されます（3日以上放置された PR は次回実行時に自動でクローズ）
-
-削除された投稿の確認は Actions → **Digest Check Deleted** から実行します。
+掲載済みの投稿・動画が削除や非公開になっていないかは、Actions → **Digest Check Deleted** から確認できます（Secrets に `X_BEARER_TOKEN` / `YOUTUBE_API_KEY` が必要）。該当項目を記事から取り除く PR が作られます。
 
 ## ライセンス
 

@@ -166,11 +166,11 @@ ${body}
 `
 }
 
-/** 過去のダイジェスト記事に掲載済みのキー（x:123 など）を集める */
-export function loadUsedKeys(dir) {
+/** 過去のダイジェスト記事に掲載済みのキー（x:123 など）を集める。exclude のファイル名は数えない */
+export function loadUsedKeys(dir, { exclude = [] } = {}) {
   const used = new Set()
   if (!fs.existsSync(dir)) return used
-  for (const f of fs.readdirSync(dir).filter((f) => f.endsWith(".md"))) {
+  for (const f of fs.readdirSync(dir).filter((f) => f.endsWith(".md") && !exclude.includes(f))) {
     const text = fs.readFileSync(path.join(dir, f), "utf8")
     for (const m of text.matchAll(ITEM_RE)) used.add(`${m[1]}:${m[2]}`)
   }
