@@ -70,7 +70,8 @@ export async function searchBlueskyGenre(genre, window, now = new Date(), drops 
       q: tag ?? query,
       tag,
       sort: "top",
-      lang: genre.lang ?? "ja",
+      // lang: any なら言語で絞らない（海外の写真など）
+      lang: genre.lang === "any" ? undefined : (genre.lang ?? "ja"),
       since: window.start.toISOString(),
       until: window.end.toISOString(),
       limit: genre.limit ?? 50,

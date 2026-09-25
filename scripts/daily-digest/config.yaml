@@ -4,12 +4,13 @@
 
 article:
   minItems: 5 # これ未満しか採用できなければ記事を作らない
-  maxItems: 30
+  maxItems: 40 # Steam の新作・Bluesky の風景写真・pixiv を足したので30から増やした
   maxItemsPerCategory: 4 # 同じカテゴリはカルーセルにまとめるので、数件まで載せる
   # カテゴリごとに上限を変える場合（label: 件数）
   maxItemsByCategory:
     音楽・MV: 12
     最新技術: 8 # 最新AI技術とクリエイティブツールをまとめたので、その分多め
+    最新ゲーム: 6 # Steam の新作を足したので、その分多め
   # 記事内でのカテゴリの表示順。genres の label をすべて並べる（抜けていると実行時にエラー）
   categoryOrder:
     - 音楽・MV
@@ -67,7 +68,7 @@ youtube:
   excludeShorts: true # ショート動画を除く（/shorts/<ID> が開けるかで判定する）
   maxDurationMinutes: 15 # これより長い動画（歌枠・雑談などの配信アーカイブ）を除く
   # 音楽・MV に載せないタイトル（アニメの PV・予告・CM など）。ジャンルごとに excludeTitle で上書きできる
-  excludeTitle: "PV|Trailer|トレーラー|ティザー|予告|告知|CM|番宣|本編|切り抜き|生成してみた|AIカバー|AI歌唱|ランキング|TOP ?\\d+|ベスト\\d+|まとめ|メドレー|予想"
+  excludeTitle: "PV|Trailer|トレーラー|ティザー|予告|告知|CM|番宣|本編|切り抜き|生成してみた|AIカバー|AI歌唱|AI楽曲|AIソング|ランキング|TOP ?\\d+|ベスト\\d+|まとめ|メドレー|予想"
   # AI で作った曲を載せないよう、チャンネル名・概要欄で除く（大文字小文字は区別する）
   excludeChannel: "\\bAI\\b|ＡＩ|Suno|Udio|生成AI|AI(作曲|音楽|ソング|Music|Song|Studio)"
   excludeDescription: "Suno|Udio|AIで作(曲|成|った)|AI作曲|AI生成|生成AIで|AIを使って作|AI ?Music|Made with AI"
@@ -192,6 +193,15 @@ genres:
     source: x
     query: "(セール OR 無料配布 OR 期間限定無料 OR 割引) (ゲーム OR ソフト OR ツール OR 素材 OR Steam)"
 
+  # Steam で直近に発売されたゲームを、発売直後の同時接続数で並べる。
+  # ほしい物リストの数は公開されておらず、フォロワー数のページはすぐアクセス制限がかかるので、同時接続数を人気の目安にする
+  - id: steam-new
+    label: 最新ゲーム
+    source: steam-new
+    maxReleaseAgeDays: 1 # ストアの発売日は日付だけなので、昨日と今日の発売
+    minPlayers: 100
+    maxItems: 10
+
   - id: sale-steam
     label: セール
     source: steam
@@ -233,7 +243,11 @@ genres:
     label: 音楽・MV
     step: ボカロ・歌ってみた
     source: youtube
-    q: "初音ミク|重音テト|可不|鏡音リン|GUMI|知声|小春六花|ボカロP|VOCALOID"
+    q: "初音ミク|重音テト|可不|鏡音リン|鏡音レン|GUMI|知声|小春六花|星界|裏命|ボカロP|VOCALOID"
+    # 再生数順の上位はショートが占めてオリジナル曲がほとんど残らないので、4ページ（200件・400ユニット）まで読む
+    pages: 4
+    # 小さなボカロ P の曲も採用されているので、再生数の下限を下げる
+    minViews: 300
 
   - id: music
     label: 音楽・MV
@@ -249,13 +263,15 @@ genres:
     label: 音楽・MV
     step: SoundCloud
     source: soundcloud
-    tags: [vocaloid, j-pop, anime, j-core]
-    queries: [初音ミク, 重音テト, 可不]
+    tags: [vocaloid, j-pop, anime, j-core, utau, synthesizerv, cevio]
+    # 採用されやすいのは歌声合成ソフト（ボカロ・UTAU・CeVIO・Synthesizer V）の「feat.」のオリジナル曲なので、歌声の名前でも検索する
+    queries: [初音ミク, 重音テト, 可不, 鏡音リン, 鏡音レン, GUMI, 知声, 小春六花, 弦巻マキ, 鳴花ヒメ, 鳴花ミコト, 歌愛ユキ, 足立レイ, 裏命, 星界, ずんだもん]
     pages: 2 # 1回の検索で読むページ数（1ページ50曲）
     maxTrackAgeDays: 7
     minLikes: 3
-    # AI で作った曲は載せない
-    exclude: "Suno|Udio|\\bAI\\b|ＡＩ|AI作曲|AI生成|生成AI|AIで作|#?ai ?music|#?aimusic"
+    # AI で作った曲は載せない（[Verse] [Chorus] のような歌詞の区切りは Suno などの生成曲に多い）。
+    # リミックスと、他人の曲の転載（「Not my track」「repost」など）も載せない
+    exclude: "Suno|Udio|\\bAI\\b|ＡＩ|AI作曲|AI生成|生成AI|AIで作|#?ai ?music|#?aimusic|Generative|\\[(Verse|Chorus|Pre-Chorus|Intro|Outro|Bridge)|[Rr]emix|REMIX|bootleg|[Nn]ot my (track|song)|[Rr]e-?(post|upload)|just a repost|原曲|本家"
 
   # ---- X API の代わり（2026-09-26〜）----
   # はてなブックマークの人気エントリー（カテゴリ別 RSS）。include に当たる記事をブックマーク数の伸び率で並べる。
@@ -263,12 +279,21 @@ genres:
   - id: hatena-ai
     label: 最新技術
     source: hatena
+    # 人気エントリー（30件）だけでは数件しか残らないので、新着エントリー（entrylists）と、
+    # AI のタグ検索・専門サイトの RSS も読み、2日以内の記事をブックマーク数の伸び率で並べる
     categories: [it]
+    entrylists: [it]
+    tags: [生成AI, ChatGPT, Claude, Gemini, LLM, AIエージェント, 画像生成AI]
+    feeds:
+      - https://rss.itmedia.co.jp/rss/2.0/aiplus.xml # ITmedia AI+
+      - https://www.publickey1.jp/atom.xml # Publickey
+      - https://gigazine.net/news/rss_2.0/ # GIGAZINE
+    maxAgeHours: 48
     # 大文字小文字は区別する。AI は英単語の途中（EXPLAIN など）に当たらないよう \b で区切る
     include: "\\bAI\\b|ＡＩ|\\bLLM|生成AI|ChatGPT|Claude|Gemini|OpenAI|Anthropic|機械学習|AIエージェント|Copilot"
     # 生成AIの是非をめぐる言い争いは載せない
     exclude: "規制|反AI|盗用|窃盗|炎上|消滅|手描き|使わない"
-    minBookmarks: 30
+    minBookmarks: 15
 
   # ツールの話題は人気エントリーに入りにくいので、ツール名のタグ検索と公式・専門サイトの RSS も読み、
   # 1週間以内の記事をブックマーク数で並べる
@@ -304,6 +329,18 @@ genres:
     minLikes: 100
     exclude: "AIイラスト|AIart|aiart|AI生成|AIグラビア|StableDiffusion|NovelAI|nijijourney|使用モデル|#NSFW|R-?18|_AI\\b|AI$"
 
+  # pixiv のランキング（デイリー・オリジナル）。通常のランキングには AI 生成作品と R-18 作品が入らない。
+  # ランキングは前日分の集計なので、投稿から48時間以内の作品を対象にする。
+  # 性的表現のフラグが付いていなくても露出の多い絵がランキングに入るので、タグでも除く
+  - id: pixiv-illust
+    label: イラスト
+    step: pixiv
+    source: pixiv
+    modes: [daily, original]
+    pages: 2
+    maxAgeHours: 48
+    exclude: "AI生成|AIイラスト|AIart|NovelAI|StableDiffusion|nijijourney|R-?18|R-?15|NSFW|漫画|マンガ|お知らせ|告知|発売|ふともも|太もも|へそ|腋|汗|まんすじ|おっぱい|巨乳|爆乳|乳|水着|下着|ぱんつ|パンツ|尻|バニー|セクシー|えっち|ハイレグ|ボディスーツ"
+
   # Misskey.io の人気ノートのうち、画像付きのもの（イラストの質が高い）。
   # 注意書き（CW）・センシティブ指定の画像があるノートは除く
   - id: misskey-illust
@@ -314,3 +351,21 @@ genres:
     requireImages: true
     minReactions: 50
     exclude: "🔞|R-?18|NSFW|ドスケベ|えっち|エロ|AIイラスト|AIart|AI生成"
+
+  # Bluesky の人気の写真。X の代わり（2026-09-26〜）。日本語のタグは数が少ないので、海外の写真タグも読む
+  - id: bluesky-landscape
+    label: 風景写真
+    source: bluesky
+    queries: ["#風景写真", "#写真好きな人と繋がりたい", "#ファインダー越しの私の世界", "#風景", "#夕焼け", "#空", "#星景写真"]
+    requireImages: true
+    minLikes: 15
+    exclude: &landscapeExclude "\\bAI\\b|ＡＩ|Midjourney|midjourney|StableDiffusion|生成|イラスト|[Ii]llustration|#art\\b|painting|drawing|ポートレート|portrait|コスプレ|cosplay|モデル|撮影会|#NSFW|nude|R-?18"
+
+  - id: bluesky-landscape-world
+    label: 風景写真
+    source: bluesky
+    lang: any
+    queries: ["#landscapephotography", "#naturephotography", "#landscape", "#sunset", "#skyphotography"]
+    requireImages: true
+    minLikes: 80
+    exclude: *landscapeExclude

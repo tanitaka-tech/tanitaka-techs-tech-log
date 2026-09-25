@@ -517,6 +517,40 @@
     &:hover
       background: var(--btn-plain-bg-hover)
 
+  // 目次の 🖼（押すとその項目の画像を記事のサムネイルにする）。選んでいる項目だけはっきり見せる
+  .digest-review-thumb-badge
+    flex-shrink: 0
+    padding: 0.25rem
+    border-radius: 0.375rem
+    font-size: 0.9rem
+    cursor: pointer
+    opacity: 0.3
+
+    &:hover
+      opacity: 0.8
+      background: var(--btn-plain-bg-hover)
+
+    &.selected
+      opacity: 1
+      background: var(--btn-plain-bg-hover)
+      outline: 2px solid var(--primary)
+
+  // バナーに出す、サムネイルに選んでいる画像
+  .digest-review-thumb
+    display: flex
+    align-items: center
+    gap: 0.75rem
+    margin: 0.5rem 0 0
+    font-size: 0.85rem
+    font-weight: bold
+
+    img
+      width: 8rem
+      aspect-ratio: 16 / 9
+      object-fit: cover
+      margin: 0
+      border-radius: 0.375rem
+
   [role=tab].digest-rejected
     opacity: 0.45
 
@@ -612,6 +646,51 @@
   // SoundCloud のプレーヤー
   .digest-soundcloud-player
     width: 100%
+
+  // pixiv 公式の埋め込み。中身の幅は固定なので、枠の幅に合わせて縮小し、高さは埋め込みから届いた値に合わせる（Layout.astro）
+  .digest-pixiv-frame
+    width: 100%
+    max-width: 700px
+    height: 720px
+    margin: 0 auto
+    overflow: hidden
+    border-radius: 0.75rem
+
+  iframe.digest-pixiv
+    display: block
+    width: 700px // 埋め込みの large（670px）と枠（30px）
+    max-width: none // 記事の iframe 共通の max-width: 100% で縮められると、縮小と二重になって右が切れる
+    height: 720px
+    border: none
+    transform-origin: top left
+
+  // YouTube のプレーヤーと、再生できないときの案内（Layout.astro）
+  .digest-youtube-player
+    width: 100%
+
+  .digest-youtube-help
+    display: flex
+    flex-wrap: wrap
+    align-items: center
+    justify-content: flex-end
+    gap: 0.75rem
+    margin-top: 0.25rem
+    padding: 0 0.25rem
+    font-size: 0.8rem
+    color: var(--content-meta, inherit)
+    opacity: 0.8
+
+    // display: flex だと hidden 属性が効かないので明示する
+    &[hidden]
+      display: none
+
+    button, a
+      color: var(--primary)
+      text-decoration: underline
+      background: none
+      border: none
+      padding: 0
+      cursor: pointer
 
   // 動画・曲のあるカルーセルの下の音量スライダー（YouTube・SoundCloud で共有）
   .digest-volume

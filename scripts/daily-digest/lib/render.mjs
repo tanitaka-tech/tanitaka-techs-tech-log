@@ -33,6 +33,12 @@ const yen = (n) => `¥${n.toLocaleString("ja-JP")}`
  * Steam 公式ウィジェット（iframe）は幅646px前提で狭い画面では崩れるので、
  * ストアへのリンク付きのカードを自前で描く
  */
+/** 新作の発売日と同時接続数（「9/25 発売 · 同時接続 32,341人」） */
+function steamRelease(r) {
+  const date = new Date(r.date).toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo", month: "numeric", day: "numeric" })
+  return `${date} 発売 · 同時接続 ${r.players.toLocaleString("ja-JP")}人`
+}
+
 function steamCard(c) {
   const sale = steamSale(c)
   const until = sale?.endsAt
@@ -47,7 +53,8 @@ function steamCard(c) {
   const price = sale
     ? `<span class="digest-steam-price"><span class="digest-steam-discount">-${sale.discountPercent}%</span><s>${yen(sale.originalPrice)}</s><strong>${yen(sale.finalPrice)}</strong></span>`
     : ""
-  return `<a class="digest-steam-card no-styling" href="${escapeAttr(c.url)}" target="_blank" rel="noopener"><img class="no-lightbox" src="${escapeAttr(thumbnail(c))}" alt="${escapeAttr(c.title)}" loading="lazy"><span class="digest-steam-body"><span class="digest-steam-title">${escapeText(c.title)}</span>${price}${until}</span></a>`
+  const release = c.release ? `<span class="digest-steam-until">${steamRelease(c.release)}</span>` : ""
+  return `<a class="digest-steam-card no-styling" href="${escapeAttr(c.url)}" target="_blank" rel="noopener"><img class="no-lightbox" src="${escapeAttr(thumbnail(c))}" alt="${escapeAttr(c.title)}" loading="lazy"><span class="digest-steam-body"><span class="digest-steam-title">${escapeText(c.title)}</span>${price}${until}${release}</span></a>`
 }
 
 const compactNumber = new Intl.NumberFormat("ja-JP", { notation: "compact", maximumFractionDigits: 1 })
@@ -111,6 +118,10 @@ function embed(c) {
       return `<blockquote class="bluesky-embed" data-bluesky-uri="${escapeAttr(c.uri)}" data-bluesky-cid="${escapeAttr(c.cid)}"><a href="${escapeAttr(c.url)}">@${escapeText(c.author.handle)} さんの Bluesky の投稿を見る</a></blockquote>`
     case "misskey":
       return misskeyCard(c)
+    case "pixiv":
+      // pixiv 公式の埋め込み。name は、埋め込みが送ってくる高さ（postMessage）をどの iframe に当てるかの目印（Layout.astro）
+      // 埋め込みは幅が固定（700px）なので、枠（digest-pixiv-frame）の幅に合わせて縮小する
+      return `<div class="digest-pixiv-frame"><iframe class="digest-pixiv" name="pixiv-${escapeAttr(c.id)}" src="https://embed.pixiv.net/embed_mk2.php?id=${escapeAttr(c.id)}&amp;size=large&amp;border=on&amp;frame=1" title="${escapeAttr(c.title)} / ${escapeAttr(c.author.name)}" loading="lazy"></iframe></div>`
     default:
       throw new Error(`unknown source: ${c.source}`)
   }
@@ -131,10 +142,12 @@ function tocLabel(c) {
     case "youtube":
     case "soundcloud":
     case "hatena":
+    case "pixiv":
       return { label: c.title, meta: c.author.name }
     case "steam": {
       const sale = steamSale(c)
-      return { label: c.title, meta: sale ? `-${sale.discountPercent}% ${yen(sale.finalPrice)}` : "Steam" }
+      if (sale) return { label: c.title, meta: `-${sale.discountPercent}% ${yen(sale.finalPrice)}` }
+      return { label: c.title, meta: c.release ? steamRelease(c.release) : "Steam" }
     }
     case "misskey":
       return { label: stripEmoji(c.author.name) || c.author.handle, meta: `@${c.author.handle}` }
@@ -152,11 +165,11 @@ function tocThumb(c) {
 }
 
 /** プレビューの記事の先頭に出す警告の一覧。公開する記事には出さない */
-function reviewBanner(warnings, date) {
+function reviewBanner(warnings, date, topicKey) {
   const list = warnings.length
     ? `<ul>${warnings.map((w) => `<li>${escapeText(w)}</li>`).join("")}</ul>`
     : "<p>警告はありません。</p>"
-  return `<div class="digest-review-banner" data-date="${escapeAttr(date)}"><p><strong>⚠️ プレビュー用の表示です。</strong>公開する記事（render --final / publish）には出ません。項目ごとの「採用」を切り替えると、selection.json に保存されます（pnpm dev のときだけ）。</p>${list}</div>\n\n`
+  return `<div class="digest-review-banner" data-date="${escapeAttr(date)}" data-thumb-key="${escapeAttr(topicKey ?? "")}"><p><strong>⚠️ プレビュー用の表示です。</strong>公開する記事（render --final / publish）には出ません。項目ごとの「採用」を切り替えると、selection.json に保存されます（pnpm dev のときだけ）。目次の 🖼 を押すと、その項目の画像を記事のサムネイルにします。</p>${list}</div>\n\n`
 }
 
 /**
@@ -221,7 +234,7 @@ ${list
     const meta = `${notes.length ? "⚠️ " : ""}${tocLabel(c).meta}`
     const noteHtml = notes.length ? `<p class="digest-review-note">⚠️ ${escapeText(notes.join(" / "))}</p>\n` : ""
     return `<!-- digest-item ${c.source}:${c.id} -->
-<div class="digest-entry digest-entry-${c.source}"${review ? ` data-key="${escapeAttr(c.key)}" data-adopt="${adopt !== false}"` : ""} data-label="${escapeAttr(tocLabel(c).label)}" data-meta="${escapeAttr(meta)}"${tocThumb(c) ? ` data-thumb="${escapeAttr(tocThumb(c))}"` : ""}${c.step ? ` data-step="${escapeAttr(c.step)}"` : ""}>
+<div class="digest-entry digest-entry-${c.source}"${review ? ` data-key="${escapeAttr(c.key)}" data-adopt="${adopt !== false}"${thumbnail(c) ? ` data-image="${escapeAttr(thumbnail(c))}"` : ""}` : ""} data-label="${escapeAttr(tocLabel(c).label)}" data-meta="${escapeAttr(meta)}"${tocThumb(c) ? ` data-thumb="${escapeAttr(tocThumb(c))}"` : ""}${c.step ? ` data-step="${escapeAttr(c.step)}"` : ""}>
 ${noteHtml}${embed(c)}
 </div>
 <!-- /digest-item -->
@@ -236,7 +249,7 @@ ${noteHtml}${embed(c)}
 
   return `${frontmatter}
 
-${review ? reviewBanner(review, date) : ""}${body}
+${review ? reviewBanner(review, date, selection.topicKey) : ""}${body}
 ---
 
 この記事は、はてなブックマーク・Bluesky・Misskey・YouTube・SoundCloud・Steam などの公開データをもとに AI が掲載候補を選び、筆者が内容を確認したうえで公開しています。掲載した投稿や動画の権利は各投稿者に帰属します。削除や掲載取りやめのご希望は、ブログのお問い合わせ先までご連絡ください。

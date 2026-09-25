@@ -5,7 +5,7 @@ description: デイリーダイジェスト記事を手元で作って公開す�
 
 # デイリーダイジェストを作る
 
-はてなブックマーク・Bluesky・Misskey・YouTube・SoundCloud・Steam で伸びた投稿・記事から記事 `src/content/posts/daily-digest/<date>.md` を作る。
+はてなブックマーク・Bluesky・Misskey・pixiv・YouTube・SoundCloud・Steam で伸びた投稿・記事から記事 `src/content/posts/daily-digest/<date>.md` を作る。
 **載せるかどうかを決めるのは人間**。Claude は候補を整理して提案し、指示どおりにルールや選定を直す。黙って候補を落とさない。
 
 候補は**実行時点から直近24時間**の投稿・動画（`config.yaml` の `collect.windowHours`）。`<date>` は記事の日付で、今日（JST）。
@@ -46,6 +46,7 @@ pnpm -s digest render --date <date>
 
 - `pnpm dev` がまだ動いていなければバックグラウンドで起動し、プレビューの URL を伝える（4321番が使われていれば起動ログのポートを使う）。
 - プレビューでは、目次の項目ごとに「✅ 採用 / ⛔ 不採用」のトグルが出る（押すと切り替わる）。ユーザーはブログの中で切り替えられ、`selection.json` の `adopt` に保存される（`pnpm dev` の開発サーバーの API で保存するので、ビルドした記事では動かない）。見出しには「採用 N / 上限 M」が出る。
+- 目次の 🖼 を押すと、その項目の画像が記事のサムネイルになる（`selection.json` の `topicKey` に保存。記事の画像は公開用に書き直すときに変わる）。画像のない項目（X・pixiv）には出ない。
 - 項目は目次のドラッグで並べ替えられる。`selection.json` の順が変わり（`ordered: true`）、ページは読み込み直さずにその場で並び替わる。公開用もその順で載る。
 - ユーザーが「選んだ」「切り替えた」と言ったら、`selection.json` の `adopt` を読み直してから次に進む（チャットで項目を言い直してもらう必要はない）。
 
