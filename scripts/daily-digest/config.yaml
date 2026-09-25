@@ -109,6 +109,7 @@ genres:
     label: 最新AI技術
     source: x
     sampleRetweets: true
+    xWeight: 2 # リツイートの標本が多いほど人気の投稿が重なって見えるので、読み取りを多めに配分する
     maxReads: 100
     # AIで生成したイラストの作品投稿は載せないので、検索の段階で除く
     query: '(生成AI OR LLM OR ChatGPT OR Claude OR Gemini OR "AIモデル" OR "画像生成AI" OR "動画生成AI") -AIイラスト -AIart -nijijourney -AIグラビア -キャンペーン -プレゼント'
@@ -135,6 +136,7 @@ genres:
     label: 伸びているイラスト
     source: x
     sampleRetweets: true
+    xWeight: 2 # リツイートの標本が多いほど人気の投稿が重なって見えるので、読み取りを多めに配分する
     maxReads: 100
     requireMedia: true # リツイート元に画像・動画がある投稿だけ
     query: "(イラスト OR 絵描きさんと繋がりたい OR 落書き OR オリジナルイラスト OR 創作) -AIイラスト -AIart -nijijourney -キャンペーン -抽選 -プレゼント -グッズ -募集"
@@ -146,6 +148,7 @@ genres:
     label: 風景写真
     source: x
     sampleRetweets: true
+    xWeight: 2 # リツイートの標本が多いほど人気の投稿が重なって見えるので、読み取りを多めに配分する
     maxReads: 100
     requireMedia: true
     query: "(風景写真 OR 写真好きな人と繋がりたい OR ファインダー越しの私の世界 OR 絶景 OR 夕焼け OR 星景写真) -AIイラスト -AIart -AI写真 -AI生成 -キャンペーン -抽選 -プレゼント"
