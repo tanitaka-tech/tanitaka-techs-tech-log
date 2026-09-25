@@ -214,6 +214,7 @@ export function renderArticle({
   stepOrder = [],
   review = null,
   categoryLimit = () => Number.POSITIVE_INFINITY,
+  keepOrder = false,
 }) {
   const items = selection.items.map((i) => ({ ...i, c: candidatesByKey.get(i.key) }))
   const groups = new Map()
@@ -223,7 +224,7 @@ export function renderArticle({
   // ソースが違うとスコアの単位が揃わないので、step をまたいでスコアでは比べない
   const stepRank = (c) => (c.step ? stepOrder.indexOf(c.step) : -1)
   for (const list of groups.values()) {
-    if (!list.some(({ c }) => c.step)) continue
+    if (keepOrder || !list.some(({ c }) => c.step)) continue
     list.sort((a, b) => stepRank(a.c) - stepRank(b.c) || b.c.score - a.c.score)
   }
   const sections = [...groups].filter(([, list]) => list.length > 0)

@@ -102,6 +102,8 @@ export function render(ctx, { force = false, final = false } = {}) {
     selection: { topic, topicKey, description: raw.description ?? "", items, news: raw.news ?? [] },
     review: reviewWarnings,
     categoryLimit,
+    // プレビューで並べ替えた記事は、selection.json の順のまま載せる
+    keepOrder: raw.ordered === true,
     candidatesByKey: new Map([...available].map(([k, e]) => [k, e.c])),
     category: config.article.category,
     fixedTags: config.article.tags ?? [],

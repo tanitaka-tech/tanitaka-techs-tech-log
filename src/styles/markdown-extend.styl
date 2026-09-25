@@ -667,8 +667,28 @@
   .digest-review-bar
     display: flex
     justify-content: flex-end
+    gap: 0.5rem
     width: 100%
     margin-bottom: 0.5rem
+
+  .digest-review-move
+    padding: 0.35rem 0.75rem
+    border-radius: 999px
+    font-size: 0.8rem
+    background: var(--btn-regular-bg-active)
+
+    &:disabled
+      opacity: 0.3
+
+  // 目次のドラッグでの並べ替え（プレビューだけ）
+  [role=tab].digest-dragging
+    opacity: 0.4
+
+  [role=tab].digest-drop-before
+    box-shadow: inset 0 3px 0 var(--primary)
+
+  [role=tab].digest-drop-after
+    box-shadow: inset 0 -3px 0 var(--primary)
 
   .digest-review-toggle
     padding: 0.35rem 0.9rem
@@ -714,22 +734,22 @@
     font-size: 0.8rem
     font-weight: bold
 
-  // SoundCloud のプレーヤーと、その下の音量の操作（プレーヤー自体には音量の操作がない）
+  // SoundCloud のプレーヤー
   .digest-soundcloud-player
     width: 100%
 
-  .digest-soundcloud-volume
+  // 動画・曲のあるカルーセルの下の音量スライダー（YouTube・SoundCloud で共有）
+  .digest-volume
     display: flex
     align-items: center
+    justify-content: center
     gap: 0.5rem
     margin-top: 0.5rem
-    padding: 0 0.25rem
     font-size: 0.9rem
 
     input
-      flex: 1
-      max-width: 12rem
-      accent-color: #f50
+      width: 10rem
+      accent-color: var(--primary)
 
   // はてなブックマークの記事のリンクカード
   a.digest-link-card
