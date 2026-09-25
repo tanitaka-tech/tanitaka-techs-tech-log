@@ -83,6 +83,11 @@ export type ZennConfig = {
 	count: number; // Number of articles to show in the sidebar
 };
 
+export type AnalyticsConfig = {
+	// Cloudflare Web Analytics. Leave empty to disable
+	cloudflareToken: string;
+};
+
 export type LIGHT_DARK_MODE =
 	| typeof LIGHT_MODE
 	| typeof DARK_MODE

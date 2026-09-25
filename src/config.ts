@@ -1,4 +1,5 @@
 import type {
+	AnalyticsConfig,
 	CommentConfig,
 	LicenseConfig,
 	NavBarConfig,
@@ -85,4 +86,9 @@ export const zennConfig: ZennConfig = {
 	enable: true,
 	username: "tanitaka_tech",
 	count: 5,
+};
+
+export const analyticsConfig: AnalyticsConfig = {
+	// Cloudflare dashboard > Web Analytics > Add a site > JS Snippet の token
+	cloudflareToken: "",
 };
