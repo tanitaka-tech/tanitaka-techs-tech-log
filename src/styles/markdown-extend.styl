@@ -182,6 +182,37 @@
     &:hover .digest-youtube-play
       background: #f00
 
+  // カルーセル内の区切り（data-step）への切り替え。表示中の項目が属する区切りを強調する
+  .digest-carousel-steps
+    display: flex
+    flex-wrap: wrap
+    gap: 0.5rem
+    margin-bottom: 0.75rem
+
+    button
+      display: flex
+      align-items: center
+      gap: 0.375rem
+      padding: 0.25rem 0.75rem
+      border-radius: 999px
+      font-size: 0.875rem
+      font-weight: 500
+      color: var(--btn-content)
+      background: var(--btn-regular-bg)
+      transition: background 0.15s, color 0.15s
+
+      &:hover
+        background: var(--btn-regular-bg-hover)
+
+      span
+        font-size: 0.75rem
+        opacity: 0.6
+
+      // ダークモードでは --primary が明るいので、白文字は載せず Fuwari のボタンと同じ配色にする
+      &[aria-current="true"]
+        color: var(--primary)
+        background: var(--btn-regular-bg-active)
+
   .digest-carousel-nav
     display: flex
     align-items: center
@@ -244,6 +275,10 @@
       border-radius: 999px
       background: var(--btn-regular-bg-active)
       transition: width 0.2s, background 0.2s, transform 0.2s
+
+    // 区切り（data-step）の境目
+    .digest-carousel-dot.step-start
+      margin-left: 0.5rem
 
     .digest-carousel-dot[aria-current="true"]::before
       width: 1.25rem
