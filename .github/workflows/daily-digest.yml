@@ -29,14 +29,21 @@ jobs:
           X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           missing=0
-          for name in X_BEARER_TOKEN YOUTUBE_API_KEY ANTHROPIC_API_KEY; do
+          for name in X_BEARER_TOKEN YOUTUBE_API_KEY; do
             if [ -z "${!name}" ]; then
               echo "::error::Secret $name が未設定、または空です"
               missing=1
             fi
           done
+          # LLM は設定済みのものだけを config.yaml の順に試すので、どれか1つあればよい
+          if [ -z "$ANTHROPIC_API_KEY$OPENAI_API_KEY$GEMINI_API_KEY" ]; then
+            echo "::error::ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY のいずれかを設定してください"
+            missing=1
+          fi
           exit $missing
 
       - name: Checkout
@@ -72,6 +79,8 @@ jobs:
           X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: node scripts/daily-digest/index.mjs --date "$INPUT_DATE"
 
       # 生データ（投稿本文など）はリポジトリに残さず、Actions の artifact として短期間だけ保持する

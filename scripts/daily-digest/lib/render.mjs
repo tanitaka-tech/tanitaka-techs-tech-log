@@ -2,6 +2,7 @@ import fs from "node:fs"
 import path from "node:path"
 
 const ITEM_RE = /<!-- digest-item (\w+):(\S+) -->[\s\S]*?<!-- \/digest-item -->\n*/g
+const SECTION_RE = /<!-- digest-section -->[\s\S]*?<!-- \/digest-section -->\n*/g
 
 function escapeText(s) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
@@ -9,6 +10,44 @@ function escapeText(s) {
 
 function escapeAttr(s) {
   return escapeText(s).replace(/"/g, "&quot;")
+}
+
+/** sale を保存していない古い候補データ用に、text から価格を読み取る */
+function steamSale(c) {
+  if (c.sale) return c.sale
+  const m = c.text.match(/(\d+)%オフ（¥(\d+) → ¥(\d+)）/)
+  if (!m) return null
+  // 終了日時は JST の「2026/10/2 2:00:00」形式
+  const e = c.text.match(/セール終了: (\d+)\/(\d+)\/(\d+) (\d+):(\d+)/)
+  return {
+    discountPercent: Number(m[1]),
+    originalPrice: Number(m[2]),
+    finalPrice: Number(m[3]),
+    endsAt: e ? new Date(Date.UTC(+e[1], +e[2] - 1, +e[3], +e[4] - 9, +e[5])).toISOString() : null,
+  }
+}
+
+const yen = (n) => `¥${n.toLocaleString("ja-JP")}`
+
+/**
+ * Steam 公式ウィジェット（iframe）は幅646px前提で狭い画面では崩れるので、
+ * ストアへのリンク付きのカードを自前で描く
+ */
+function steamCard(c) {
+  const sale = steamSale(c)
+  const until = sale?.endsAt
+    ? `<span class="digest-steam-until">${new Date(sale.endsAt).toLocaleString("ja-JP", {
+        timeZone: "Asia/Tokyo",
+        month: "numeric",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      })} まで</span>`
+    : ""
+  const price = sale
+    ? `<span class="digest-steam-price"><span class="digest-steam-discount">-${sale.discountPercent}%</span><s>${yen(sale.originalPrice)}</s><strong>${yen(sale.finalPrice)}</strong></span>`
+    : ""
+  return `<a class="digest-steam-card no-styling" href="${escapeAttr(c.url)}" target="_blank" rel="noopener"><img class="no-lightbox" src="${escapeAttr(thumbnail(c))}" alt="${escapeAttr(c.title)}" loading="lazy"><span class="digest-steam-body"><span class="digest-steam-title">${escapeText(c.title)}</span>${price}${until}</span></a>`
 }
 
 function embed(c) {
@@ -19,22 +58,43 @@ function embed(c) {
     case "youtube":
       return `<iframe class="digest-youtube" src="https://www.youtube-nocookie.com/embed/${c.id}" title="${escapeAttr(c.title)}" loading="lazy" allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`
     case "steam":
-      return `<iframe class="digest-steam" src="https://store.steampowered.com/widget/${c.id}/" title="${escapeAttr(c.title)}" loading="lazy"></iframe>`
+      return steamCard(c)
     default:
       throw new Error(`unknown source: ${c.source}`)
   }
 }
 
-export function renderArticle({ date, selection, candidatesByKey, category, fixedTags }) {
+/** 一覧・OGP に使うサムネイル。X の投稿は画像を持たないので使わない */
+function thumbnail(c) {
+  if (c.thumbnail) return c.thumbnail
+  // thumbnail を保存していない古い候補データ用
+  if (c.source === "youtube") return `https://i.ytimg.com/vi/${c.id}/hqdefault.jpg`
+  if (c.source === "steam") return `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${c.id}/header.jpg`
+  return undefined
+}
+
+/**
+ * 記事を組み立てる。項目はカテゴリ（ジャンルのラベル）ごとにまとめ、categoryOrder の順に
+ * 「固定の見出し + 埋め込みのカルーセル」として並べる。
+ */
+export function renderArticle({ date, selection, candidatesByKey, category, fixedTags, categoryOrder }) {
   const items = selection.items.map((i) => ({ ...i, c: candidatesByKey.get(i.key) }))
-  const tags = [...new Set([...fixedTags, category, ...items.map((i) => i.c.genreLabel)])]
+  const groups = new Map()
+  for (const label of categoryOrder) groups.set(label, [])
+  for (const item of items) groups.get(item.c.genreLabel).push(item)
+  const sections = [...groups].filter(([, list]) => list.length > 0)
+
+  const tags = [...new Set([...fixedTags, category, ...sections.map(([label]) => label)])]
+  const featured = candidatesByKey.get(selection.topicKey)
+  const image =
+    (featured && thumbnail(featured)) ?? sections.flatMap(([, list]) => list.map((i) => thumbnail(i.c))).find(Boolean)
 
   const frontmatter = [
     "---",
     `title: ${JSON.stringify(`${selection.topic.trim()} ${date}`)}`,
     `published: ${date}`,
     `description: ${JSON.stringify(selection.description)}`,
-    `image: ""`,
+    `image: ${JSON.stringify(image ?? "")}`,
     `tags: ${JSON.stringify(tags)}`,
     `category: ${JSON.stringify(category)}`,
     "draft: false",
@@ -42,32 +102,35 @@ export function renderArticle({ date, selection, candidatesByKey, category, fixe
     "---",
   ].join("\n")
 
-  const body = items
+  // カルーセルの中に空行を入れると Markdown として解釈されてしまうので、1つの HTML ブロックにする
+  const body = sections
     .map(
-      ({ c, heading, summary }) => `<!-- digest-item ${c.source}:${c.id} -->
-## ${escapeText(heading)}
+      ([label, list]) => `<!-- digest-section -->
+## ${escapeText(label)}
 
-<span class="digest-genre">${escapeText(c.genreLabel)}</span>
-
-${escapeText(summary)}
-
-<div class="digest-embed">
+<div class="digest-carousel">
+${list
+  .map(
+    ({ c }) => `<!-- digest-item ${c.source}:${c.id} -->
+<div class="digest-slide digest-slide-${c.source}">
 ${embed(c)}
 </div>
-
 <!-- /digest-item -->
+`,
+  )
+  .join("")}</div>
+
+<!-- /digest-section -->
 `,
     )
     .join("\n")
 
   return `${frontmatter}
 
-${escapeText(selection.description)}
-
 ${body}
 ---
 
-この記事は、X・YouTube・Steam の公開データをもとに AI（Claude）が下書きを作成し、筆者が内容を確認したうえで公開しています。掲載した投稿や動画の権利は各投稿者に帰属します。削除や掲載取りやめのご希望は、ブログのお問い合わせ先までご連絡ください。
+この記事は、X・YouTube・Steam の公開データをもとに AI が掲載候補を選び、筆者が内容を確認したうえで公開しています。掲載した投稿や動画の権利は各投稿者に帰属します。削除や掲載取りやめのご希望は、ブログのお問い合わせ先までご連絡ください。
 `
 }
 
@@ -105,6 +168,9 @@ export function removeItems(file, keys) {
     removed++
     return ""
   })
-  if (removed > 0) fs.writeFileSync(file, next)
+  if (removed > 0) {
+    // 項目がすべて消えたカテゴリは見出しごと取り除く
+    fs.writeFileSync(file, next.replace(SECTION_RE, (block) => (block.includes("<!-- digest-item ") ? block : "")))
+  }
   return removed
 }

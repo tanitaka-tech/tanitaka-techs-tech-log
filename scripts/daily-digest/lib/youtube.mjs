@@ -30,6 +30,10 @@ export async function fetchVideos(ids, key) {
   return items
 }
 
+function bestThumbnail(t = {}) {
+  return (t.maxres ?? t.standard ?? t.high ?? t.medium ?? t.default)?.url
+}
+
 /**
  * 指定日（JST）に公開された動画を再生数順に検索する。
  * search.list は1回100ユニット消費するので、ジャンルごとに1回だけ呼ぶ。
@@ -69,6 +73,7 @@ export async function searchYoutubeGenre(genre, window, config, key, now = new D
         genreLabel: genre.label,
         url: `https://www.youtube.com/watch?v=${v.id}`,
         title: v.snippet.title,
+        thumbnail: bestThumbnail(v.snippet.thumbnails),
         text: (v.snippet.description ?? "").slice(0, 400),
         author: { name: v.snippet.channelTitle, handle: v.snippet.channelId },
         publishedAt: publishedAt.toISOString(),
