@@ -12,7 +12,13 @@ declare global {
 		YT?: {
 			Player: new (
 				el: HTMLIFrameElement,
-				options: { events: { onReady?: () => void; onStateChange: (e: { data: number }) => void } },
+				options: {
+					events: {
+						onReady?: () => void;
+						onError?: (e: { data: number }) => void;
+						onStateChange: (e: { data: number }) => void;
+					};
+				},
 			) => {
 				pauseVideo?: () => void;
 				playVideo?: () => void;
@@ -34,7 +40,9 @@ declare global {
 				getPosition: (callback: (ms: number) => void) => void;
 				getDuration: (callback: (ms: number) => void) => void;
 				seekTo: (ms: number) => void;
-			}) & { Events: { PLAY: string; PAUSE: string; FINISH: string; READY: string } };
+			}) & {
+				Events: { PLAY: string; PAUSE: string; FINISH: string; READY: string };
+			};
 		};
 		pagefind: {
 			search: (query: string) => Promise<{
