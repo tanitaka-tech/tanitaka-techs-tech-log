@@ -9,20 +9,17 @@ article:
   # カテゴリごとに上限を変える場合（label: 件数）
   maxItemsByCategory:
     音楽・MV: 12
+    最新技術: 8 # 最新AI技術とクリエイティブツールをまとめたので、その分多め
   # 記事内でのカテゴリの表示順。genres の label をすべて並べる（抜けていると実行時にエラー）
   categoryOrder:
     - 音楽・MV
-    - 最新AI技術
-    - 最新クリエイティブツール
+    - 最新技術
     - 表現の解説
     - 最新ゲーム
     - やる気が出る・元気になる
     - セール
     - イラスト
     - 風景写真
-  # 見出しから閉じられないカテゴリ（再生中に閉じて音が止まらないように）
-  fixedCategories:
-    - 音楽・MV
   category: デイリーダイジェスト
   # 手書きの記事と見分けるため、生成記事に必ず付けるタグ
   tags: [自動生成]
@@ -123,7 +120,7 @@ genres:
   #   excludeVerifiedTypes: 除く認証の種類。business（企業・団体）を除くと、公式アカウントの告知が減る
   # exclude は本文・投稿者名に対する正規表現で、当たる投稿は除く
   - id: ai
-    label: 最新AI技術
+    label: 最新技術
     source: x
     sampleRetweets: true
     xWeight: 2 # リツイートの標本が多いほど人気の投稿が重なって見えるので、読み取りを多めに配分する
@@ -135,7 +132,7 @@ genres:
     exclude: "AIイラスト|AIart|aiart|nijijourney|NovelAI|AIグラビア|#NSFW|キャンペーン|プレゼント|抽選|盗難|窃盗|犯罪|搾取|信者|規制|消滅|手描き|反AI|無検閲|月\\d+万|稼げ|副業|note販売"
 
   - id: creative-tools
-    label: 最新クリエイティブツール
+    label: 最新技術
     source: x
     # 騒動・規約変更などの話題に巻き込まれないよう、リリース・新機能の告知に寄せる
     query: '(Blender OR Photoshop OR "CLIP STUDIO" OR クリスタ OR Figma OR "After Effects" OR "DaVinci Resolve" OR Procreate OR Live2D OR Unity OR "Unreal Engine" OR Krita OR ZBrush) (新機能 OR アップデート OR リリース OR 正式リリース OR 正式版 OR ベータ版 OR 新バージョン OR 搭載 OR 配信開始) -騒動 -炎上 -規約 -改悪 -AIイラスト'
@@ -264,7 +261,7 @@ genres:
   # はてなブックマークの人気エントリー（カテゴリ別 RSS）。include に当たる記事をブックマーク数の伸び率で並べる。
   # categories: it（テクノロジー）/ game（アニメとゲーム）/ knowledge（学び）/ entertainment など
   - id: hatena-ai
-    label: 最新AI技術
+    label: 最新技術
     source: hatena
     categories: [it]
     # 大文字小文字は区別する。AI は英単語の途中（EXPLAIN など）に当たらないよう \b で区切る
@@ -276,7 +273,7 @@ genres:
   # ツールの話題は人気エントリーに入りにくいので、ツール名のタグ検索と公式・専門サイトの RSS も読み、
   # 1週間以内の記事をブックマーク数で並べる
   - id: hatena-tools
-    label: 最新クリエイティブツール
+    label: 最新技術
     source: hatena
     categories: [it, game, knowledge]
     tags: [Blender, Photoshop, Illustrator, CLIP STUDIO PAINT, クリスタ, Live2D, Figma, Unity, Unreal Engine, Godot, Krita, After Effects, DaVinci Resolve, 3DCG]
@@ -286,7 +283,7 @@ genres:
       - https://unity.com/ja/blog/rss
     maxAgeHours: 168
     include: "Blender|Photoshop|CLIP STUDIO|クリスタ|Figma|After Effects|Premiere|DaVinci|Procreate|Live2D|Unity|Unreal Engine|Krita|ZBrush|Illustrator|Adobe|Godot|Aseprite|3DCG|フォント|描き方|お絵描き"
-    # 規約・決済をめぐる騒動は「ネットで話題のニュース」で扱う
+    # 規約・決済をめぐる騒動は載せない
     exclude: "炎上|騒動|規制|検閲|決済"
     minBookmarks: 5
 

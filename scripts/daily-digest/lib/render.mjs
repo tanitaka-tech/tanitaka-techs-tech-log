@@ -159,46 +159,6 @@ function reviewBanner(warnings, date) {
   return `<div class="digest-review-banner" data-date="${escapeAttr(date)}"><p><strong>⚠️ プレビュー用の表示です。</strong>公開する記事（render --final / publish）には出ません。項目ごとの「採用」を切り替えると、selection.json に保存されます（pnpm dev のときだけ）。</p>${list}</div>\n\n`
 }
 
-/** ニュース1件（ネットで話題になっている出来事の概要）。出典へのリンクを必ず付ける */
-function newsCard(n) {
-  const paragraphs = String(n.summary ?? "")
-    .split(/\n+/)
-    .filter(Boolean)
-    .map((p) => `<p>${escapeText(p)}</p>`)
-    .join("")
-  const sources = (n.sources ?? [])
-    .map((s) => `<li><a href="${escapeAttr(s.url)}" target="_blank" rel="noopener">${escapeText(s.label ?? s.url)}</a></li>`)
-    .join("")
-  return `<div class="digest-news-card"><p class="digest-news-title">${escapeText(n.title)}</p>${paragraphs}${sources ? `<p class="digest-news-sources-label">出典</p><ul class="digest-news-sources">${sources}</ul>` : ""}<p class="digest-news-disclaimer">※ 公開されている情報をもとに AI がまとめ、筆者が確認した概要です。詳しくは出典をご覧ください。</p></div>`
-}
-
-/**
- * 記事の最後に置く「ネットで話題のニュース」。カテゴリと同じカルーセルで見せ、最初は閉じておく
- * （data-collapsed。開閉は Layout.astro）。項目のキー（digest-item）は付けないので、削除確認の対象にならない
- */
-function newsSection(news, review) {
-  if (!news?.length) return ""
-  return `<!-- digest-news -->
-## ネットで話題のニュース
-
-<div class="digest-items" data-collapsed="true">
-${news
-  .map(
-    (n) => {
-      // プレビューでは、確かめきれていない点など note を表示する
-      const note = review && n.note ? `<p class="digest-review-note">⚠️ ${escapeText(n.note)}</p>\n` : ""
-      return `<div class="digest-entry digest-entry-news" data-label="${escapeAttr(n.title)}" data-meta="${escapeAttr(`${note ? "⚠️ " : ""}出典 ${n.sources?.length ?? 0}件`)}">
-${note}${newsCard(n)}
-</div>
-`
-    },
-  )
-  .join("")}</div>
-
-<!-- /digest-news -->
-`
-}
-
 /**
  * 記事を組み立てる。項目はカテゴリ（ジャンルのラベル）ごとにまとめ、categoryOrder の順に
  * 「固定の見出し + 目次付きの項目一覧」として並べる（目次と切り替えは Layout.astro が付ける）。
@@ -215,7 +175,6 @@ export function renderArticle({
   review = null,
   categoryLimit = () => Number.POSITIVE_INFINITY,
   keepOrder = false,
-  fixedCategories = [],
 }) {
   const items = selection.items.map((i) => ({ ...i, c: candidatesByKey.get(i.key) }))
   const groups = new Map()
@@ -254,7 +213,7 @@ export function renderArticle({
       ([label, list]) => `<!-- digest-section -->
 ## ${escapeText(label)}
 
-<div class="digest-items"${fixedCategories.includes(label) ? ` data-fixed="true"` : ""}${review ? ` data-limit="${categoryLimit(label)}"` : ""}>
+<div class="digest-items"${review ? ` data-limit="${categoryLimit(label)}"` : ""}>
 ${list
   .map(({ c, note, adopt }) => {
     // プレビューでは注意のある項目に印を付け、目次でも分かるようにする
@@ -278,7 +237,6 @@ ${noteHtml}${embed(c)}
   return `${frontmatter}
 
 ${review ? reviewBanner(review, date) : ""}${body}
-${newsSection(selection.news, review)}
 ---
 
 この記事は、はてなブックマーク・Bluesky・Misskey・YouTube・SoundCloud・Steam などの公開データをもとに AI が掲載候補を選び、筆者が内容を確認したうえで公開しています。掲載した投稿や動画の権利は各投稿者に帰属します。削除や掲載取りやめのご希望は、ブログのお問い合わせ先までご連絡ください。
