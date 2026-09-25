@@ -14,7 +14,7 @@ import { excludeShortsAndStreams, fetchVideos, hasKana, isEmbeddable, toYoutubeC
 const TWEET_PARAMS = {
   "tweet.fields": "created_at,public_metrics,author_id,entities,possibly_sensitive",
   expansions: "author_id",
-  "user.fields": "username,name,protected",
+  "user.fields": "username,name,protected,public_metrics",
 }
 
 /** 検索結果をページ送りしながら limit 件まで読む */
@@ -72,13 +72,14 @@ export function postUrls(t) {
 
 /**
  * リンク先（linkId で URL から取り出した ID）ごとに、共有したアカウント（重複なし）とその投稿のいいね数を集計する。
- * linkId は対象外の URL に null を返す
+ * linkId は対象外の URL に null を返す。フォロワーが minFollowers 未満のアカウントは共有者に数えない
  */
-export function aggregateShares(posts, users, window, linkId = youtubeVideoId) {
+export function aggregateShares(posts, users, window, { linkId = youtubeVideoId, minFollowers = 0 } = {}) {
   const byVideo = new Map()
   for (const t of posts) {
     const user = users.get(t.author_id)
     if (!user || user.protected || t.possibly_sensitive) continue
+    if ((user.public_metrics?.followers_count ?? 0) < minFollowers) continue
     const at = new Date(t.created_at)
     if (at < window.start || at > window.end) continue
     const ids = new Set(postUrls(t).map(linkId).filter(Boolean))
@@ -136,7 +137,7 @@ export async function collectXYoutubeGenre(genre, window, config, { xToken, ytKe
   if (!read) return []
   const { posts, users } = read
 
-  const byVideo = aggregateShares(posts, users, window)
+  const byVideo = aggregateShares(posts, users, window, { minFollowers: genre.minFollowers ?? 0 })
   const minSharers = genre.minSharers ?? 1
   const ids = [...byVideo].filter(([, s]) => s.size >= minSharers).map(([id]) => id)
   console.log(`[x] ${genre.id}: ${posts.length}件の投稿から動画 ${byVideo.size}本（${minSharers}人以上の共有: ${ids.length}本）`)
