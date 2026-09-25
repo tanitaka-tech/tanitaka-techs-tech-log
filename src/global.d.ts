@@ -6,6 +6,15 @@ declare global {
 		swup: AstroIntegration;
 		// X の埋め込み用 widgets.js
 		twttr?: { widgets: { load: (el?: Element) => void } };
+		// YouTube IFrame Player API（ダイジェストの動画を同時に再生させないため）
+		YT?: {
+			Player: new (
+				el: HTMLIFrameElement,
+				options: { events: { onStateChange: (e: { data: number }) => void } },
+			) => { pauseVideo?: () => void };
+			PlayerState: { PLAYING: number };
+		};
+		onYouTubeIframeAPIReady?: () => void;
 		pagefind: {
 			search: (query: string) => Promise<{
 				results: Array<{

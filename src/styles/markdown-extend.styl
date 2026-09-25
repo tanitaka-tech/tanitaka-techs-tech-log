@@ -84,8 +84,9 @@
     margin-right: auto
     max-width: 100%
 
-  // デイリーダイジェスト: カテゴリごとに埋め込みを1件ずつ表示するカルーセル。
-  // 下のドットで切り替え、横スクロール（スワイプ）でも送れる。高さは表示中の項目に合わせる（Layout.astro）
+  // デイリーダイジェスト: カテゴリごとに埋め込みをページ単位で表示するカルーセル。
+  // 高さは一番高い項目に揃え、低い項目は1ページに縦に積む（配置は Layout.astro）。
+  // スクリプトが動くまでは項目を横に並べただけの表示になる
   .digest-carousel-wrap
     margin: 1rem 0 2.5rem
 
@@ -97,7 +98,6 @@
     scroll-snap-type: x mandatory
     overscroll-behavior-x: contain
     scrollbar-width: none
-    transition: height 0.3s ease
 
     &::-webkit-scrollbar
       display: none
@@ -107,7 +107,15 @@
       display: flex
       justify-content: center
       scroll-snap-align: start
-      scroll-snap-stop: always
+
+    // スクリプトで配置したあと。各項目を left（ページ）と top（ページ内の位置）で置く
+    &.stacked
+      position: relative
+      display: block
+
+      .digest-slide
+        position: absolute
+        width: 100%
 
     .twitter-tweet
       margin: 0 !important
@@ -120,12 +128,68 @@
       border: none
       border-radius: 0.75rem
 
+  // YouTube のサムネイル。クリックでプレーヤーに差し替える
+  a.digest-youtube-facade
+    position: relative
+    display: block
+    width: 100%
+    aspect-ratio: 16 / 9
+    overflow: hidden
+    border-radius: 0.75rem
+    background: #000
+
+    img
+      display: block
+      width: 100%
+      height: 100%
+      object-fit: cover
+      margin: 0
+      border-radius: 0
+
+    .digest-youtube-title
+      position: absolute
+      top: 0
+      left: 0
+      right: 0
+      padding: 0.75rem 1rem 2.5rem
+      overflow: hidden
+      white-space: nowrap
+      text-overflow: ellipsis
+      font-weight: 500
+      color: #fff
+      background: linear-gradient(rgba(0, 0, 0, 0.6), transparent)
+
+    .digest-youtube-play
+      position: absolute
+      top: 50%
+      left: 50%
+      width: 68px
+      height: 48px
+      margin: -24px 0 0 -34px
+      border-radius: 14px
+      background: rgba(33, 33, 33, 0.8)
+      transition: background 0.15s
+
+      &::after
+        content: ""
+        position: absolute
+        top: 13px
+        left: 27px
+        border-style: solid
+        border-width: 11px 0 11px 18px
+        border-color: transparent transparent transparent #fff
+
+    &:hover .digest-youtube-play
+      background: #f00
+
   .digest-carousel-nav
     display: flex
     align-items: center
     justify-content: center
     gap: 0.25rem
-    margin-top: 0.75rem
+    // ホイールで送れる範囲を広めにとる
+    padding: 0.5rem 0
+    margin-top: 0.25rem
 
     button
       display: flex
@@ -148,13 +212,38 @@
       font-size: 1.4rem
       line-height: 1
 
+    .digest-carousel-dots
+      position: relative
+      display: flex
+      gap: 0.25rem
+      overflow: hidden
+
+      button
+        flex: 0 0 auto
+
+    .digest-carousel-count
+      margin-left: 0.25rem
+      font-size: 0.75rem
+      opacity: 0.6
+      font-variant-numeric: tabular-nums
+
+    // 表示するドットを9個分の幅に絞る
+    &.many .digest-carousel-dots
+      max-width: calc(9 * 1.75rem + 8 * 0.25rem)
+
+    &.many .digest-carousel-dot[data-distance="3"]::before
+      transform: scale(0.75)
+
+    &.many .digest-carousel-dot[data-distance="4"]::before
+      transform: scale(0.5)
+
     .digest-carousel-dot::before
       content: ""
       width: 0.5rem
       height: 0.5rem
       border-radius: 999px
       background: var(--btn-regular-bg-active)
-      transition: width 0.2s, background 0.2s
+      transition: width 0.2s, background 0.2s, transform 0.2s
 
     .digest-carousel-dot[aria-current="true"]::before
       width: 1.25rem
