@@ -28,7 +28,7 @@ export async function fetchSteamSales(genre, config) {
           ? `。セール終了: ${new Date(i.discount_expiration * 1000).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}`
           : ""
       }`,
-      author: { name: "Steam", handle: "steam" },
+      author: { id: "steam", name: "Steam", handle: "steam" },
       publishedAt: new Date().toISOString(),
       metrics: { discountPercent: i.discount_percent },
       sale: {

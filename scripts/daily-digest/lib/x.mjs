@@ -70,7 +70,8 @@ export async function searchXGenre(genre, window, config, token, budget, now = n
       url: `https://x.com/${user.username}/status/${t.id}`,
       title: "",
       text: t.text,
-      author: { name: user.name, handle: user.username },
+      // handle は変更できるので、ルール（curation.yaml）には変わらない id を使う
+      author: { id: user.id, name: user.name, handle: user.username },
       publishedAt: publishedAt.toISOString(),
       metrics: t.public_metrics,
       score: velocity(xEngagement(t.public_metrics), publishedAt, now),

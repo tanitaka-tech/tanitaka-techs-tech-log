@@ -90,8 +90,9 @@ export function aggregateShares(posts, users, window) {
 
 /** 共有者数を主に、いいね数の合計を同数のときの差として使う */
 export function shareScore(sharers) {
-  const totalLikes = [...sharers.values()].reduce((sum, s) => sum + s.likes, 0)
-  return sharers.size + Math.log10(1 + totalLikes) / 10
+  const list = sharers instanceof Map ? [...sharers.values()] : sharers
+  const totalLikes = list.reduce((sum, s) => sum + s.likes, 0)
+  return list.length + Math.log10(1 + totalLikes) / 10
 }
 
 export async function collectXYoutubeGenre(genre, window, config, { xToken, ytKey }, budget, now = new Date(), share = Infinity) {
@@ -127,7 +128,11 @@ export async function collectXYoutubeGenre(genre, window, config, { xToken, ytKe
       const sharers = byVideo.get(v.id)
       const c = toYoutubeCandidate(v, genre, now)
       c.metrics.sharers = sharers.size
-      c.sharedBy = [...sharers.values()].sort((a, b) => b.likes - a.likes).map((s) => `@${s.handle}`)
+      // 共有者の id を残しておき、curation.yaml の ignore-sharer で後から除けるようにする
+      c.sharers = [...sharers]
+        .map(([id, s]) => ({ id, ...s }))
+        .sort((a, b) => b.likes - a.likes)
+      c.sharedBy = c.sharers.map((s) => `@${s.handle}`)
       c.score = shareScore(sharers)
       return c
     })
