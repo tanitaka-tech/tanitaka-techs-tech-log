@@ -84,14 +84,106 @@
     margin-right: auto
     max-width: 100%
 
-  // デイリーダイジェスト: カテゴリごとに「左に目次、右に選択中の項目」で表示する（切り替えは Layout.astro）。
+  // デイリーダイジェスト: カテゴリの見出しと項目一覧を1枚のカードにまとめて見せる。
+  // 見出しと一覧は同じ section に入るが、最後の section には記事末尾の注意書きも入るので、
+  // section ではなく見出しと一覧のそれぞれに背景を付けてつなげる
+  section:has(.digest-items)
+    margin-top: 1.5rem
+
+    > h2
+      display: flex
+      align-items: center
+      gap: 0.5rem
+      margin: 0
+      padding: 1rem 1.25rem 0.75rem
+      border-radius: var(--radius-large) var(--radius-large) 0 0
+      background: var(--btn-regular-bg)
+      cursor: pointer
+      user-select: none
+
+    // 一覧。スクリプトで開閉できる形（.digest-body）にしたもの、またはスクリプトが動く前のもの
+    > .digest-body, > .digest-items
+      margin: 0 0 1.5rem
+      border-radius: 0 0 var(--radius-large) var(--radius-large)
+      background: var(--btn-regular-bg)
+
+    > .digest-items
+      padding: 0 1.25rem 1.25rem
+
+    @media (max-width: 767px)
+      > h2
+        padding: 0.75rem 0.75rem 0.5rem
+
+      > .digest-items, .digest-body-content
+        padding: 0 0.75rem 0.75rem
+
+    // 閉じたとき。一覧が縮みきってから見出しの下の角を丸める
+    &.digest-collapsed
+      > h2
+        padding-bottom: 1rem
+        border-radius: var(--radius-large)
+        transition: border-radius 0s 0.3s, padding 0s 0.3s
+
+      > .digest-body
+        grid-template-rows: 0fr
+
+  // 見出しの横の件数
+  .digest-count
+    font-size: 0.875rem
+    font-weight: normal
+    opacity: 0.5
+
+  // 見出しの右端の開閉ボタン
+  .digest-toggle
+    display: flex
+    align-items: center
+    justify-content: center
+    flex-shrink: 0
+    width: 2rem
+    height: 2rem
+    margin-left: auto
+    border-radius: 999px
+    color: var(--btn-content)
+    transition: background 0.15s
+
+    &:hover
+      background: var(--btn-plain-bg-hover)
+
+    svg
+      width: 1.5rem
+      height: 1.5rem
+      fill: currentColor
+      transition: transform 0.3s ease
+
+    &[aria-expanded="false"] svg
+      transform: rotate(-90deg)
+
+  // 開閉は高さ 1fr ⇔ 0fr の切り替えでアニメーションする。
+  // 余白は縮めきれるよう、はみ出しを隠す要素のさらに内側（.digest-body-content）に付ける
+  .digest-body
+    display: grid
+    grid-template-rows: 1fr
+    transition: grid-template-rows 0.3s ease
+
+  .digest-body-inner
+    min-height: 0
+    overflow: hidden
+
+  .digest-body-content
+    padding: 0 1.25rem 1.25rem
+
+  // 見出しと一覧の間の区切り線（サイトの他の区切りと同じ破線）
+  .digest-divider
+    margin-bottom: 1rem
+    border-top: 1px dashed var(--line-divider)
+
+  // カテゴリごとに「左に目次、右に選択中の項目」で表示する（切り替えは Layout.astro）。
   // スクリプトが動くまでは項目を縦に並べただけの表示になる
   .digest-browser
     display: grid
     grid-template-columns: minmax(9rem, 15rem) minmax(0, 1fr)
     gap: 1rem
     align-items: start
-    margin: 1rem 0 2.5rem
 
     @media (max-width: 767px)
       grid-template-columns: minmax(0, 1fr)
@@ -100,10 +192,10 @@
     display: flex
     flex-direction: column
     gap: 0.125rem
-    // 右側（一番高い項目）と同じ高さにし、長いときは目次の中でスクロールする
+    // 右側（一番高い項目）と同じ高さにし、長いときは目次の中でスクロールする。
+    // 目次の端まで来たらページのスクロールに移れるよう、overscroll-behavior で止めない
     height: var(--digest-height)
     overflow-y: auto
-    overscroll-behavior: contain
     scrollbar-width: thin
 
     // 狭い画面では目次が上に来るので、低めに抑える
@@ -130,7 +222,8 @@
         outline: none
 
       &[aria-selected="true"]
-        background: var(--btn-regular-bg)
+        // グループの背景（--btn-regular-bg）の上で目立つよう、カードの地の色にする
+        background: var(--card-bg)
 
         .digest-toc-label
           color: var(--primary)
@@ -143,7 +236,7 @@
       font-size: 0.875rem
       font-weight: 500
       line-height: 1.4
-      color: var(--deep-text)
+      color: inherit
 
     .digest-toc-meta
       overflow: hidden
@@ -151,6 +244,27 @@
       text-overflow: ellipsis
       font-size: 0.75rem
       opacity: 0.6
+
+    // 再生数・いいね数・リポスト数
+    .digest-toc-stats
+      display: flex
+      gap: 0.625rem
+      font-size: 0.75rem
+      opacity: 0.6
+
+    .digest-toc-stat
+      display: inline-flex
+      align-items: center
+      gap: 0.2rem
+      font-variant-numeric: tabular-nums
+
+      svg
+        width: 0.875rem
+        height: 0.875rem
+        fill: currentColor
+
+      &.likes svg
+        fill: #f91880
 
   // 目次の区切り（data-step）の小見出し
   .digest-toc-step
@@ -185,9 +299,9 @@
         width: 100%
         visibility: hidden
         opacity: 0
-        transition: opacity 0.15s, visibility 0.15s
 
-        &.active
+        // 切り替えのアニメーション（Layout.astro）の間は、消えていく項目も見せておく
+        &.active, &.leaving
           visibility: visible
           opacity: 1
 
@@ -264,13 +378,13 @@
     max-width: 460px
     overflow: hidden
     border-radius: 0.75rem
-    background: var(--btn-regular-bg)
+    background: var(--card-bg)
     color: inherit
     text-decoration: none
     transition: background 0.15s
 
     &:hover
-      background: var(--btn-regular-bg-hover)
+      background: var(--btn-card-bg-hover)
 
     img
       display: block
@@ -288,7 +402,7 @@
 
     .digest-steam-title
       font-weight: bold
-      color: var(--deep-text)
+      color: inherit
 
     .digest-steam-price
       display: flex
@@ -302,7 +416,7 @@
 
       strong
         font-size: 1.125rem
-        color: var(--deep-text)
+        color: inherit
 
     .digest-steam-discount
       padding: 0 0.4rem

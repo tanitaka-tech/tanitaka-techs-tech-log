@@ -90,6 +90,14 @@ function tocLabel(c) {
   }
 }
 
+/** 目次に出す数値（収集時点）。YouTube は再生数、X はいいね数とリポスト数 */
+function statsAttrs(c) {
+  const m = c.metrics ?? {}
+  if (c.source === "youtube" && m.views != null) return ` data-views="${m.views}"`
+  if (c.source === "x") return ` data-likes="${m.like_count ?? 0}" data-reposts="${m.retweet_count ?? 0}"`
+  return ""
+}
+
 /**
  * 記事を組み立てる。項目はカテゴリ（ジャンルのラベル）ごとにまとめ、categoryOrder の順に
  * 「固定の見出し + 目次付きの項目一覧」として並べる（目次と切り替えは Layout.astro が付ける）。
@@ -136,7 +144,7 @@ export function renderArticle({ date, selection, candidatesByKey, category, fixe
 ${list
   .map(
     ({ c }) => `<!-- digest-item ${c.source}:${c.id} -->
-<div class="digest-entry digest-entry-${c.source}" data-label="${escapeAttr(tocLabel(c).label)}" data-meta="${escapeAttr(tocLabel(c).meta)}"${c.step ? ` data-step="${escapeAttr(c.step)}"` : ""}>
+<div class="digest-entry digest-entry-${c.source}" data-label="${escapeAttr(tocLabel(c).label)}" data-meta="${escapeAttr(tocLabel(c).meta)}"${statsAttrs(c)}${c.step ? ` data-step="${escapeAttr(c.step)}"` : ""}>
 ${embed(c)}
 </div>
 <!-- /digest-item -->
