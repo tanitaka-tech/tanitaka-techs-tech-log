@@ -65,6 +65,13 @@ describe("renderArticle", () => {
     assert.match(article(), /この記事は、はてなブックマーク・YouTubeの公開データ/)
   })
 
+  it("og:image のないはてなの記事は画像なしのカードにする", () => {
+    const cs = [makeCandidate({ id: "h2", source: "hatena", genre: "hatena-ai", genreLabel: "最新技術" })]
+    const md = article({ candidates: cs })
+    assert.match(md, /digest-link-card/)
+    assert.doesNotMatch(md, /<img[^>]*src="undefined"/)
+  })
+
   it("タイトルなどの HTML を逃がす", () => {
     const cs = [makeCandidate({ id: "v1", title: '<b>"x"</b>' })]
     const md = article({ candidates: cs })

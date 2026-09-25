@@ -61,10 +61,6 @@ export function render(ctx, { force = false, final = false } = {}) {
   for (const [label, n] of perCategory) {
     if (n > categoryLimit(label)) overLimit.push(`${label}: 採用 ${n}件（上限 ${categoryLimit(label)}件）`)
   }
-  // note（注意）を付けた項目は不採用にしておく決まり。採用のままなら、見落としかもしれないので知らせる
-  for (const i of items.filter((i) => i.note && i.adopt !== false)) {
-    warnings.push(`#${numbers[i.key]}: 注意（${i.note}）があるのに採用になっています`)
-  }
   const adopted = items.filter((i) => i.adopt !== false).length
   if (adopted > config.article.maxItems) {
     overLimit.push(`記事全体: 採用 ${adopted}件（上限 ${config.article.maxItems}件）`)
@@ -90,6 +86,9 @@ export function render(ctx, { force = false, final = false } = {}) {
     topicKey = items[0].key
   }
 
+  // note（注意）を付けた項目は不採用にしておく決まりなので、採用のままなら見落としでないか分かるよう印を付ける。
+  // プレビューの採用トグルは記事を書き出し直さないので、記事の警告には付けない（古くなる）
+  const noteLine = (i) => `#${numbers[i.key]}: ${i.note}${i.adopt !== false ? "（採用中）" : ""}`
   const collected = readJson(ctx.paths.collect, {})
   // プレビューの記事の先頭に出す警告。公開する記事（--final）には出さない
   const reviewWarnings = final
@@ -118,7 +117,7 @@ export function render(ctx, { force = false, final = false } = {}) {
 
   console.log(`${articlePath} を書き出しました${final ? "（公開用）" : "（プレビュー用。警告を記事に表示しています）"}: ${topic} ${date}`)
   for (const [label, n] of perCategory) console.log(`  ${label}: ${n}件`)
-  for (const i of items.filter((i) => i.note)) console.log(`  ⚠️ #${numbers[i.key]} ${i.note}`)
+  for (const i of items.filter((i) => i.note)) console.log(`  ⚠️ ${noteLine(i)}`)
   for (const w of [...warnings, ...overLimit]) console.log(`  ⚠️ ${w}`)
   console.log(`\nプレビュー（pnpm dev）: http://localhost:4321/tanitaka-techs-tech-log/posts/daily-digest/${date}/`)
 }

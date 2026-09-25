@@ -79,7 +79,9 @@ const soundcloudArtwork = (url, size) => url?.replace(/-t500x500\.(\w+)$/, `-${s
 
 /** はてなブックマークの記事のリンクカード（はてなのエントリー画像・タイトル・サイト名・ブックマーク数） */
 function hatenaCard(c) {
-  return `<a class="digest-link-card no-styling" href="${escapeAttr(c.url)}" target="_blank" rel="noopener"><img class="no-lightbox" src="${escapeAttr(thumbnail(c))}" alt="" loading="lazy"><span class="digest-link-body"><span class="digest-link-title">${escapeText(c.title)}</span><span class="digest-link-meta">${escapeText(c.author.name)}${c.metrics?.bookmarks ? ` · はてなブックマーク ${c.metrics.bookmarks}users` : ""}</span></span></a>`
+  // og:image のない記事もあるので、そのときは画像なしのカードにする
+  const image = thumbnail(c) ? `<img class="no-lightbox" src="${escapeAttr(thumbnail(c))}" alt="" loading="lazy">` : ""
+  return `<a class="digest-link-card no-styling" href="${escapeAttr(c.url)}" target="_blank" rel="noopener">${image}<span class="digest-link-body"><span class="digest-link-title">${escapeText(c.title)}</span><span class="digest-link-meta">${escapeText(c.author.name)}${c.metrics?.bookmarks ? ` · はてなブックマーク ${c.metrics.bookmarks}users` : ""}</span></span></a>`
 }
 
 /**
