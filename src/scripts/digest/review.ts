@@ -5,7 +5,9 @@ import { digestLists } from "./list";
  * - 目次の ✅ / ⛔ を押すと採用・不採用が切り替わる
  * - 目次の項目をドラッグすると並べ替わる（ページは読み込み直さない）
  * - 目次の 🖼 を押すと、その項目の画像が記事のサムネイルになる（selection.json の topicKey。記事の画像は公開用に書き出すときに変わる）
- * どちらも開発サーバーの API（scripts/daily-digest/dev-review.mjs）が selection.json に保存する。
+ * - バナーでタイトル（の前半）と説明を書き換えられる（selection.json の topic / description）
+ * - 項目の上の「ルール」から、その項目・投稿者を今後出さない・強める・弱める・推すルールを curation.yaml に足せる
+ * どれも開発サーバーの API（scripts/daily-digest/dev-review.mjs）が保存する。
  * 公開する記事にはバナーがないので何もしない
  */
 export async function setupDigestReview() {
@@ -18,6 +20,8 @@ export async function setupDigestReview() {
 		adopt: Record<string, boolean>;
 		order: string[];
 		thumbnail?: string;
+		topic?: string;
+		description?: string;
 	} = { adopt: {}, order: [] };
 	try {
 		const res = await fetch(`/__digest/selection?date=${date}`);
@@ -67,6 +71,7 @@ export async function setupDigestReview() {
 	const fail = (what: string, e: unknown) => {
 		status.textContent = `${what}を保存できませんでした（pnpm dev で開いていますか？）: ${e instanceof Error ? e.message : e}`;
 	};
+	banner.append(createMetaEditor(saved, post, status, fail));
 
 	for (const panel of document.querySelectorAll<HTMLElement>(
 		".digest-items[data-limit]",
@@ -153,6 +158,27 @@ export async function setupDigestReview() {
 			};
 			apply(
 				key in saved.adopt ? saved.adopt[key] : entry.dataset.adopt !== "false",
+			);
+			entry.prepend(
+				createRuleMenu(entry, async (rule) => {
+					const label = entry.dataset.label ?? key;
+					const reason = window.prompt(
+						`「${label}」: ${rule.text}\n理由（curation.yaml の reason）`,
+						rule.reason,
+					);
+					if (!reason) return;
+					try {
+						await post("/__digest/curate", { key, reason, ...rule.body });
+						// 今後出さないものは、今回の記事からも外す
+						if (rule.body.action === "block") {
+							await post("/__digest/adopt", { key, adopt: false });
+							apply(false);
+						}
+						status.textContent = `ルールを足しました: ${label} — ${rule.text}（pnpm digest review で反映後の候補を確かめられます）`;
+					} catch (err) {
+						fail("ルール", err);
+					}
+				}),
 			);
 			const onToggle = async (e: Event) => {
 				e.stopPropagation();
@@ -255,3 +281,119 @@ export async function setupDigestReview() {
 	showThumbnail(saved.thumbnail || banner.dataset.thumbKey || "");
 }
 let dragging: HTMLElement | undefined;
+
+type RuleChoice = {
+	text: string;
+	reason: string;
+	body: {
+		scope: "item" | "author";
+		action: "block" | "weight" | "pin";
+		weight?: number;
+	};
+};
+
+/** 項目ごとのルールの選択肢。block は今回の記事からも外す */
+const RULE_CHOICES: RuleChoice[] = [
+	{
+		text: "この項目を今後出さない",
+		reason: "",
+		body: { scope: "item", action: "block" },
+	},
+	{
+		text: "この投稿者を今後出さない",
+		reason: "",
+		body: { scope: "author", action: "block" },
+	},
+	{
+		text: "この投稿者を強める（×2）",
+		reason: "好みの投稿者",
+		body: { scope: "author", action: "weight", weight: 2 },
+	},
+	{
+		text: "この投稿者を弱める（×0.5）",
+		reason: "",
+		body: { scope: "author", action: "weight", weight: 0.5 },
+	},
+	{
+		text: "この投稿者を推す（必ず候補に出す）",
+		reason: "推し",
+		body: { scope: "author", action: "pin" },
+	},
+];
+
+/** 項目の上に出す「ルール」のメニュー */
+function createRuleMenu(
+	entry: HTMLElement,
+	onChoose: (rule: RuleChoice) => void,
+) {
+	const menu = document.createElement("details");
+	menu.className = "digest-review-tools";
+	const summary = document.createElement("summary");
+	summary.textContent = "ルール";
+	menu.append(summary);
+	// Steam は投稿者が「Steam」ひとつにまとまるので、投稿者のルールは出さない
+	const hasAuthor = !entry.classList.contains("digest-entry-steam");
+	for (const rule of RULE_CHOICES) {
+		if (rule.body.scope === "author" && !hasAuthor) continue;
+		const button = document.createElement("button");
+		button.type = "button";
+		button.textContent = rule.text;
+		button.addEventListener("click", () => {
+			menu.open = false;
+			onChoose(rule);
+		});
+		menu.append(button);
+	}
+	return menu;
+}
+
+/** バナーに出す、記事のタイトル（の前半）と説明の入力欄 */
+function createMetaEditor(
+	saved: { topic?: string; description?: string },
+	post: (path: string, body: object) => Promise<void>,
+	status: HTMLElement,
+	fail: (what: string, e: unknown) => void,
+) {
+	const form = document.createElement("form");
+	form.className = "digest-review-meta";
+	const field = (
+		label: string,
+		value: string,
+		max: number,
+		multiline: boolean,
+	) => {
+		const wrap = document.createElement("label");
+		const caption = document.createElement("span");
+		const input = document.createElement(multiline ? "textarea" : "input");
+		input.value = value;
+		input.maxLength = max;
+		const count = () => {
+			caption.textContent = `${label}（${input.value.length} / ${max}文字）`;
+		};
+		input.addEventListener("input", count);
+		count();
+		wrap.append(caption, input);
+		form.append(wrap);
+		return input;
+	};
+	const topic = field("タイトル（日付の前）", saved.topic ?? "", 40, false);
+	const description = field("説明", saved.description ?? "", 80, true);
+	const save = document.createElement("button");
+	save.type = "submit";
+	save.textContent = "タイトルと説明を保存";
+	form.append(save);
+	form.addEventListener("submit", async (e) => {
+		e.preventDefault();
+		try {
+			await post("/__digest/meta", {
+				topic: topic.value,
+				description: description.value,
+			});
+			status.textContent =
+				"タイトルと説明を保存しました（記事に出すには pnpm digest render で書き出し直します）";
+		} catch (err) {
+			fail("タイトルと説明", err);
+		}
+	});
+	return form;
+}
