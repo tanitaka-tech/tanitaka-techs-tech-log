@@ -211,7 +211,7 @@ export async function selectAndWrite(candidates, { date, minItems, maxItems, max
   )
 }
 
-/** --mock-llm 用。APIを呼ばずにスコア上位を機械的に選ぶ */
+/** select --mock 用。APIを呼ばずにスコア上位を機械的に選ぶ */
 export function mockSelect(candidates, { maxItems, categoryLimit }) {
   const perGenre = new Map()
   const items = []
