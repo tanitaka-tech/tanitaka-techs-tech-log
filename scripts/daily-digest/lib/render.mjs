@@ -215,6 +215,7 @@ export function renderArticle({
   review = null,
   categoryLimit = () => Number.POSITIVE_INFINITY,
   keepOrder = false,
+  fixedCategories = [],
 }) {
   const items = selection.items.map((i) => ({ ...i, c: candidatesByKey.get(i.key) }))
   const groups = new Map()
@@ -253,7 +254,7 @@ export function renderArticle({
       ([label, list]) => `<!-- digest-section -->
 ## ${escapeText(label)}
 
-<div class="digest-items"${review ? ` data-limit="${categoryLimit(label)}"` : ""}>
+<div class="digest-items"${fixedCategories.includes(label) ? ` data-fixed="true"` : ""}${review ? ` data-limit="${categoryLimit(label)}"` : ""}>
 ${list
   .map(({ c, note, adopt }) => {
     // プレビューでは注意のある項目に印を付け、目次でも分かるようにする

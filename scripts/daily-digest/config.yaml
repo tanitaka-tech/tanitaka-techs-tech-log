@@ -14,13 +14,15 @@ article:
     - 音楽・MV
     - 最新AI技術
     - 最新クリエイティブツール
-    - ツールの使い方・使いこなし術
     - 表現の解説
     - 最新ゲーム
     - やる気が出る・元気になる
     - セール
-    - 伸びているイラスト
+    - イラスト
     - 風景写真
+  # 見出しから閉じられないカテゴリ（再生中に閉じて音が止まらないように）
+  fixedCategories:
+    - 音楽・MV
   category: デイリーダイジェスト
   # 手書きの記事と見分けるため、生成記事に必ず付けるタグ
   tags: [自動生成]
@@ -135,11 +137,6 @@ genres:
     # 騒動・規約変更などの話題に巻き込まれないよう、リリース・新機能の告知に寄せる
     query: '(Blender OR Photoshop OR "CLIP STUDIO" OR クリスタ OR Figma OR "After Effects" OR "DaVinci Resolve" OR Procreate OR Live2D OR Unity OR "Unreal Engine" OR Krita OR ZBrush) (新機能 OR アップデート OR リリース OR 正式リリース OR 正式版 OR ベータ版 OR 新バージョン OR 搭載 OR 配信開始) -騒動 -炎上 -規約 -改悪 -AIイラスト'
 
-  - id: tool-tips
-    label: ツールの使い方・使いこなし術
-    source: x
-    query: '(Blender OR Photoshop OR "CLIP STUDIO" OR クリスタ OR Figma OR "After Effects" OR "DaVinci Resolve" OR Procreate) (Tips OR 小技 OR やり方 OR 使い方 OR 時短 OR ショートカット)'
-
   - id: games
     label: 最新ゲーム
     source: x
@@ -151,7 +148,7 @@ genres:
     query: '(新作ゲーム OR 発売日 OR 配信開始 OR 新作発表 OR "Nintendo Direct" OR Steam) (ゲーム OR Switch OR PS5 OR Steam)'
 
   - id: illust
-    label: 伸びているイラスト
+    label: イラスト
     step: X
     source: x
     sampleRetweets: true
@@ -268,7 +265,7 @@ genres:
     # 大文字小文字は区別する。AI は英単語の途中（EXPLAIN など）に当たらないよう \b で区切る
     include: "\\bAI\\b|ＡＩ|\\bLLM|生成AI|ChatGPT|Claude|Gemini|OpenAI|Anthropic|機械学習|AIエージェント|Copilot"
     # 生成AIの是非をめぐる言い争いは載せない
-    exclude: "規制|反AI|盗用|窃盗|炎上"
+    exclude: "規制|反AI|盗用|窃盗|炎上|消滅|手描き|使わない"
     minBookmarks: 30
 
   # ツールの話題は人気エントリーに入りにくいので、ツール名のタグ検索と公式・専門サイトの RSS も読み、
@@ -297,7 +294,7 @@ genres:
 
   # Bluesky の人気の投稿（イラスト）。AI 絵はタグ・投稿者名で除く
   - id: bluesky-illust
-    label: 伸びているイラスト
+    label: イラスト
     step: Bluesky
     source: bluesky
     queries: ["#イラスト", "#絵描きさんと繋がりたい", "#一次創作", "#創作", "#落書き", "#illustration"]
@@ -308,7 +305,7 @@ genres:
   # Misskey.io の人気ノートのうち、画像付きのもの（イラストの質が高い）。
   # 注意書き（CW）・センシティブ指定の画像があるノートは除く
   - id: misskey-illust
-    label: 伸びているイラスト
+    label: イラスト
     step: Misskey
     source: misskey
     host: misskey.io

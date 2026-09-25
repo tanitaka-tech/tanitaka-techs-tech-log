@@ -2,13 +2,15 @@
  * プレビュー中の記事から、項目ごとの採用・不採用を selection.json に書き込むための Astro インテグレーション。
  * `pnpm dev` の開発サーバーにだけ API を足す（ビルドした記事には何も入らない）。
  *
- *   GET  /__digest/selection?date=YYYY-MM-DD   → { adopt: { <キー>: true|false } }
+ *   GET  /__digest/selection?date=YYYY-MM-DD   → { adopt: { <キー>: true|false }, order: [<キー>, ...] }
  *   POST /__digest/adopt  { date, key, adopt } → selection.json の該当項目の adopt を書き換える
- *   POST /__digest/order  { date, keys }       → keys（1つのカテゴリの項目）をこの順に並べ替え、プレビューを書き出し直す
+ *   POST /__digest/order  { date, keys }       → keys（1つのカテゴリの項目）をこの順に並べ替える
+ *
+ * 記事（.md）は書き出し直さない（書き出すと開発サーバーがページを読み込み直すため）。
+ * プレビューの画面は GET の order で並べ直し、公開用に書き出すとき（render --final）に selection.json の順が使われる。
  *
  * 画面側（採用のトグル）は Layout.astro。プレビューの記事（render の既定）にだけ出る。
  */
-import { execFileSync } from "node:child_process"
 import fs from "node:fs"
 import path from "node:path"
 
@@ -60,7 +62,8 @@ export function digestReview() {
               const selection = readJson(paths(date).selection, { items: [] })
               const resolve = resolver(date)
               const adopt = Object.fromEntries(selection.items.map((i) => [resolve(i.key), i.adopt !== false]))
-              return send(res, 200, { adopt })
+              const order = selection.ordered ? selection.items.map((i) => resolve(i.key)) : []
+              return send(res, 200, { adopt, order })
             }
             if (req.method === "POST" && url.pathname === "/__digest/adopt") {
               const { date, key, adopt } = JSON.parse(await readBody(req))
@@ -96,7 +99,6 @@ export function digestReview() {
               // render は、手で並べ替えた記事ではスコア順に並べ直さない
               selection.ordered = true
               fs.writeFileSync(file, `${JSON.stringify(selection, null, 2)}\n`)
-              execFileSync("node", ["scripts/daily-digest/index.mjs", "render", "--date", date], { stdio: "pipe" })
               return send(res, 200, { keys })
             }
             return send(res, 404, { error: "not found" })
