@@ -1,5 +1,6 @@
 ---
 import path from "node:path";
+import Comments from "@components/Comments.astro";
 import License from "@components/misc/License.astro";
 import Markdown from "@components/misc/Markdown.astro";
 import I18nKey from "@i18n/i18nKey";
@@ -13,6 +14,7 @@ import PostMetadata from "../../components/PostMeta.astro";
 import ImageWrapper from "../../components/misc/ImageWrapper.astro";
 import { profileConfig, siteConfig } from "../../config";
 import { formatDateToYYYYMMDD } from "../../utils/date-utils";
+import { getAbsoluteImageUrl } from "../../utils/image-utils";
 
 export async function getStaticPaths() {
 	const blogEntries = await getSortedPosts();
@@ -26,6 +28,13 @@ const { entry } = Astro.props;
 const { Content, headings } = await entry.render();
 
 const { remarkPluginFrontmatter } = await entry.render();
+
+const postDir = path.join("content/posts/", getDir(entry.id));
+const ogImage = await getAbsoluteImageUrl(
+	entry.data.image,
+	Astro.site ?? Astro.url,
+	postDir,
+);
 
 const jsonLd = {
 	"@context": "https://schema.org",
@@ -42,10 +51,13 @@ const jsonLd = {
 	inLanguage: entry.data.lang
 		? entry.data.lang.replace("_", "-")
 		: siteConfig.lang.replace("_", "-"),
-	// TODO include cover image here
+	...(entry.data.updated && {
+		dateModified: formatDateToYYYYMMDD(entry.data.updated),
+	}),
+	...(ogImage && { image: ogImage }),
 };
 ---
-<MainGridLayout banner={entry.data.image} title={entry.data.title} description={entry.data.description} lang={entry.data.lang} setOGTypeArticle={true} headings={headings}>
+<MainGridLayout banner={entry.data.image} title={entry.data.title} description={entry.data.description} lang={entry.data.lang} setOGTypeArticle={true} ogImage={ogImage} canonical={entry.data.canonical} headings={headings}>
     <script is:inline slot="head" type="application/ld+json" set:html={JSON.stringify(jsonLd)}></script>
     <div class="flex w-full rounded-[var(--radius-large)] overflow-hidden relative mb-4">
         <div id="post-container" class:list={["card-base z-10 px-6 md:px-9 pt-6 pb-4 relative w-full ",
@@ -96,7 +108,7 @@ const jsonLd = {
             <!-- always show cover as long as it has one -->
 
             {entry.data.image &&
-                <ImageWrapper id="post-cover" src={entry.data.image} basePath={path.join("content/posts/", getDir(entry.id))} class="mb-8 rounded-xl banner-container onload-animation"/>
+                <ImageWrapper id="post-cover" src={entry.data.image} basePath={postDir} class="mb-8 rounded-xl banner-container onload-animation"/>
             }
 
 
@@ -108,6 +120,8 @@ const jsonLd = {
 
         </div>
     </div>
+
+    <Comments class="mb-4 onload-animation" />
 
     <div class="flex flex-col md:flex-row justify-between mb-4 gap-4 overflow-hidden w-full">
         <a href={entry.data.nextSlug ? getPostUrlBySlug(entry.data.nextSlug) : "#"}

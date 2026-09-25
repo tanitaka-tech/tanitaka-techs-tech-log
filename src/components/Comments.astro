@@ -1,0 +1,79 @@
+---
+import { commentConfig, siteConfig } from "../config";
+
+interface Props {
+	class?: string;
+}
+
+const className = Astro.props.class;
+const { giscus } = commentConfig;
+---
+{giscus.enable && (
+	<giscus-comments
+		class:list={["block card-base px-6 md:px-9 py-6", className]}
+		data-repo={giscus.repo}
+		data-repo-id={giscus.repoId}
+		data-category={giscus.category}
+		data-category-id={giscus.categoryId}
+		data-lang={siteConfig.lang}
+	></giscus-comments>
+)}
+
+<script>
+	const GISCUS_ORIGIN = "https://giscus.app";
+
+	function currentTheme() {
+		return document.documentElement.classList.contains("dark")
+			? "dark"
+			: "light";
+	}
+
+	// A custom element is (re)initialized whenever it is inserted into the DOM,
+	// which also covers page transitions by Swup.
+	class GiscusComments extends HTMLElement {
+		connectedCallback() {
+			if (this.querySelector("script, iframe")) return;
+			const script = document.createElement("script");
+			script.src = `${GISCUS_ORIGIN}/client.js`;
+			script.async = true;
+			script.crossOrigin = "anonymous";
+			const attrs: Record<string, string> = {
+				"data-repo": this.dataset.repo ?? "",
+				"data-repo-id": this.dataset.repoId ?? "",
+				"data-category": this.dataset.category ?? "",
+				"data-category-id": this.dataset.categoryId ?? "",
+				"data-mapping": "pathname",
+				"data-strict": "1",
+				"data-reactions-enabled": "1",
+				"data-emit-metadata": "0",
+				"data-input-position": "top",
+				"data-theme": currentTheme(),
+				"data-lang": this.dataset.lang ?? "ja",
+				"data-loading": "lazy",
+			};
+			for (const [key, value] of Object.entries(attrs)) {
+				script.setAttribute(key, value);
+			}
+			this.appendChild(script);
+		}
+	}
+
+	// Guard against re-execution of this script on page transitions
+	if (!customElements.get("giscus-comments")) {
+		customElements.define("giscus-comments", GiscusComments);
+
+		// Follow the site's light/dark switch
+		new MutationObserver(() => {
+			const iframe = document.querySelector<HTMLIFrameElement>(
+				"iframe.giscus-frame",
+			);
+			iframe?.contentWindow?.postMessage(
+				{ giscus: { setConfig: { theme: currentTheme() } } },
+				GISCUS_ORIGIN,
+			);
+		}).observe(document.documentElement, {
+			attributes: true,
+			attributeFilter: ["class"],
+		});
+	}
+</script>

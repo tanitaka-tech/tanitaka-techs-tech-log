@@ -1,22 +1,25 @@
 import type {
+	AnalyticsConfig,
+	CommentConfig,
 	LicenseConfig,
 	NavBarConfig,
 	ProfileConfig,
 	SiteConfig,
+	ZennConfig,
 } from "./types/config";
 import { LinkPreset } from "./types/config";
 
 export const siteConfig: SiteConfig = {
 	title: "tanitaka-techのテックログ",
 	subtitle: "kaihatsu is tanoshii",
-	lang: "ja", // 'en', 'zh_CN', 'zh_TW', 'ja', 'ko', 'es', 'th'
+	lang: "ja", // 'en', 'ja'
 	themeColor: {
 		hue: 250, // Default hue for the theme color, from 0 to 360. e.g. red: 0, teal: 200, cyan: 250, pink: 345
 		fixed: false, // Hide the theme color picker for visitors
 	},
 	banner: {
 		enable: false,
-		src: "assets/images/demo-banner.png", // Relative to the /src directory. Relative to the /public directory if it starts with '/'
+		src: "", // Relative to the /src directory. Relative to the /public directory if it starts with '/'
 		position: "center", // Equivalent to object-position, only supports 'top', 'center', 'bottom'. 'center' by default
 		credit: {
 			enable: false, // Display the credit text of the banner image
@@ -39,15 +42,11 @@ export const siteConfig: SiteConfig = {
 };
 
 export const navBarConfig: NavBarConfig = {
-	links: [
-		LinkPreset.Home,
-		LinkPreset.Archive,
-		LinkPreset.About,
-	],
+	links: [LinkPreset.Home, LinkPreset.Archive, LinkPreset.About],
 };
 
 export const profileConfig: ProfileConfig = {
-	avatar: "assets/images/demo-avatar.png", // Relative to the /src directory. Relative to the /public directory if it starts with '/'
+	avatar: "assets/images/avatar.png", // Relative to the /src directory. Relative to the /public directory if it starts with '/'
 	name: "tanitaka-tech",
 	bio: "開発者",
 	links: [
@@ -70,4 +69,26 @@ export const licenseConfig: LicenseConfig = {
 	enable: true,
 	name: "CC BY-NC-SA 4.0",
 	url: "https://creativecommons.org/licenses/by-nc-sa/4.0/",
+};
+
+export const commentConfig: CommentConfig = {
+	// https://giscus.app/ja
+	giscus: {
+		enable: true,
+		repo: "tanitaka-tech/tanitaka-techs-tech-log",
+		repoId: "R_kgDORRblEQ",
+		category: "Announcements",
+		categoryId: "DIC_kwDORRblEc4DGXh5",
+	},
+};
+
+export const zennConfig: ZennConfig = {
+	enable: true,
+	username: "tanitaka_tech",
+	count: 5,
+};
+
+export const analyticsConfig: AnalyticsConfig = {
+	// Cloudflare dashboard > Web Analytics > Add a site > JS Snippet の token
+	cloudflareToken: "",
 };

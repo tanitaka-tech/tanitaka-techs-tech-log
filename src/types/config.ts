@@ -67,6 +67,27 @@ export type LicenseConfig = {
 	url: string;
 };
 
+export type CommentConfig = {
+	giscus: {
+		enable: boolean;
+		repo: `${string}/${string}`;
+		repoId: string;
+		category: string;
+		categoryId: string;
+	};
+};
+
+export type ZennConfig = {
+	enable: boolean;
+	username: string;
+	count: number; // Number of articles to show in the sidebar
+};
+
+export type AnalyticsConfig = {
+	// Cloudflare Web Analytics. Leave empty to disable
+	cloudflareToken: string;
+};
+
 export type LIGHT_DARK_MODE =
 	| typeof LIGHT_MODE
 	| typeof DARK_MODE
