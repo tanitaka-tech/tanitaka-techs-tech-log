@@ -2,8 +2,10 @@
 # 手で編集してもよいが、`pnpm digest curate ...` を使うと候補番号（#3 など）から ID を引いて書き込める。
 #
 # match（書いた条件をすべて満たす候補に当たる）:
-#   key:    個別の投稿・動画・曲（x:<投稿ID> / youtube:<動画ID> / soundcloud:<曲ID> / steam:<appID>）
-#   author: 投稿者（x:<ユーザーID> / youtube:<チャンネルID> / soundcloud:<ユーザーID>）。X の @handle は変わるので使わない
+#   key:    個別の項目（<ソース>:<ID>。youtube:<動画ID> / soundcloud:<曲ID> / pixiv:<作品ID> / bluesky:<DID>/<rkey> /
+#           misskey:<ノートID> / hatena:<URL のハッシュ> / steam:<appID> / x:<投稿ID>。ソースの一覧は lib/sources.mjs）
+#   author: 投稿者（youtube:<チャンネルID> / bluesky:<DID> / pixiv:<ユーザーID> / hatena:<サイトのドメイン> / x:<ユーザーID> など）。
+#           @handle は変わるので使わない。番号から引くときは curate block author:#3 のように書く
 #   genre:  config.yaml の genres の id（x-music / vtuber など）
 #   text:   本文・タイトルに対する正規表現（大文字小文字は区別しない）
 #   sharer: X のユーザーID（x:<ユーザーID>）。action: ignore-sharer 専用
@@ -12,7 +14,7 @@
 #   block:         候補から外す
 #   weight:        スコアに weight を掛ける（2 なら倍、0.5 なら半分）。当たったルールの weight はすべて掛け合わせる
 #   pin:           スコアや block に関係なく候補一覧に必ず残す（掲載済みのものは除く）
-#   ignore-sharer: X で YouTube・SoundCloud を貼ったアカウントを共有者数に数えない（宣伝・bot 対策）
+#   ignore-sharer: X で YouTube・SoundCloud を貼ったアカウントを共有者数に数えない（宣伝・bot 対策。X を使っている間だけ効く）
 #
 # reason と added は必須。until（YYYY-MM-DD）を書くと、その日を過ぎたら効かなくなる。
 rules:

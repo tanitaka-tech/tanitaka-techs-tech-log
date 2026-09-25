@@ -58,7 +58,7 @@ pnpm -s digest render --date <date>
 - おすすめ（`adopt: true` にした候補）には ✅ を付ける。
 - note を付けた候補には ⚠️ と理由を付ける。**勝手に除外せず、判断はユーザーに任せる**。
 - 収集エラーや、候補が少ないカテゴリがあれば書く。
-- 出力の最後の「ジャンルごとの歩留まり」で、X の読み取りのわりに候補が残らないジャンルがあれば、検索の見直し（`config.yaml` の query・exclude・sampleRetweets など）を提案する。
+- 出力の最後の「ジャンルごとの歩留まり」で、候補が少ない・ルールで多く外れる・掲載に至らないジャンルがあれば、条件の見直し（`config.yaml` の include・exclude・tags・minLikes・minBookmarks など。「収集で除外」の内訳が多い理由の条件）を提案する。
 - 最後に、ルールにしてよさそうなものを提案する（例:「#12 の投稿者は懸賞ばかりなので block しますか？」）。
 
 ## 4. 選定の形式と添削
@@ -94,7 +94,7 @@ pnpm -s digest render --date <date>
 | 「VTuber 少し強めに」「AI の話題は控えめに」 | `curate weight genre:vtuber 1.5 --reason <理由>`（強めは 1.5〜2、控えめは 0.5 前後から） |
 | 「この人の曲は優先して」 | `curate weight author:#7 2 --reason <理由>` |
 | 「#9 は絶対入れて」「推し」 | `curate pin '#9' --reason <理由>` に加え、選定にも入れる |
-| 「@xxx は bot なので共有者から外して」 | `curate ignore-sharer @xxx --reason <理由>` |
+| 「@xxx は bot なので共有者から外して」（X を使っている間だけ） | `curate ignore-sharer @xxx --reason <理由>` |
 | 「懸賞っぽい投稿は下げて」 | `curate weight 'text:フォロー.?RT' 0.3 --reason <理由>`（text は正規表現） |
 | 「今月だけ」 | どのルールにも `--until YYYY-MM-DD` を付ける |
 | 「さっきのルール取り消して」 | `curate unset <同じ対象>`（`curate list` で確認できる） |
