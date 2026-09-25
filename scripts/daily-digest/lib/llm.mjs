@@ -8,7 +8,7 @@ const SYSTEM = `あなたは日本語の技術・クリエイティブ系ブロ�
 - 読者はクリエイター・エンジニア・ゲーム好き。役に立つ、または純粋に面白いものを優先する。
 - 音楽・動画は、アニメ・ボカロ・歌ってみた・VTuber など日本のオタク文化に根ざしたものを、海外の大型アーティストより優先する。
 - metrics.sharers は、その動画を X で共有したアカウントの数（重複なし）。再生数が少なくても sharers が多ければ界隈で話題になっている。
-- 1つのジャンルに偏りすぎないようにする。
+- 1つのジャンルに偏りすぎないようにする。step があるジャンルは、同じ step に偏りすぎないようにする。
 - 次に当てはまる候補は必ず除外し、rejected に理由を書く:
   - 政治・宗教・事件事故・災害・訃報・炎上・誹謗中傷
   - 一般の個人の私生活や、本人が晒されることを望まないと思われる内容
@@ -64,6 +64,7 @@ function toPromptCandidate(c) {
   return {
     key: c.key,
     genre: c.genreLabel,
+    step: c.step,
     source: c.source,
     title: c.title || undefined,
     text: c.text,
@@ -72,8 +73,10 @@ function toPromptCandidate(c) {
   }
 }
 
-function userPrompt(candidates, { date, minItems, maxItems, maxPerCategory }) {
-  return `${date} のデイリーダイジェストを作ります。候補から ${minItems}〜${maxItems} 件を選んでください（同じジャンルは最大 ${maxPerCategory} 件）。条件を満たす候補が ${minItems} 件に満たない場合は、無理に埋めず満たすものだけを返してください。
+function userPrompt(candidates, { date, minItems, maxItems, maxPerCategory, maxItemsByCategory = {} }) {
+  const overrides = Object.entries(maxItemsByCategory).map(([label, n]) => `${label} は最大 ${n} 件`)
+  const limits = `同じジャンルは最大 ${maxPerCategory} 件${overrides.length ? `、ただし ${overrides.join("、")}` : ""}`
+  return `${date} のデイリーダイジェストを作ります。候補から ${minItems}〜${maxItems} 件を選んでください（${limits}）。条件を満たす候補が ${minItems} 件に満たない場合は、無理に埋めず満たすものだけを返してください。
 
 <candidates>
 ${JSON.stringify(candidates.map(toPromptCandidate), null, 2)}
@@ -198,8 +201,8 @@ const PROVIDERS = {
  * 候補から掲載項目を選ばせる。providers を上から順に試し、失敗したら次にフォールバックする。
  * APIキーが未設定のプロバイダーは飛ばす。戻り値は { selection: SCHEMA の形, provider, model }。
  */
-export async function selectAndWrite(candidates, { date, minItems, maxItems, maxPerCategory, providers }) {
-  const prompt = userPrompt(candidates, { date, minItems, maxItems, maxPerCategory })
+export async function selectAndWrite(candidates, { date, minItems, maxItems, maxPerCategory, maxItemsByCategory, providers }) {
+  const prompt = userPrompt(candidates, { date, minItems, maxItems, maxPerCategory, maxItemsByCategory })
   const failures = []
   for (const { provider, model } of providers) {
     const p = PROVIDERS[provider]
@@ -227,12 +230,12 @@ export async function selectAndWrite(candidates, { date, minItems, maxItems, max
 }
 
 /** --mock-llm 用。APIを呼ばずにスコア上位を機械的に選ぶ */
-export function mockSelect(candidates, { maxItems, maxPerCategory }) {
+export function mockSelect(candidates, { maxItems, categoryLimit }) {
   const perGenre = new Map()
   const items = []
   for (const c of [...candidates].sort((a, b) => b.score - a.score)) {
     const n = perGenre.get(c.genreLabel) ?? 0
-    if (n >= maxPerCategory || items.length >= maxItems) continue
+    if (n >= categoryLimit(c.genreLabel) || items.length >= maxItems) continue
     perGenre.set(c.genreLabel, n + 1)
     items.push({ key: c.key, note: "" })
   }

@@ -666,7 +666,9 @@ function createWheelGestureDetector() {
 /**
  * デイリーダイジェストのカルーセル。
  * 高さは中の一番高い項目に固定し、低い項目は1ページに縦に積めるだけ積む（X の投稿は高さの差が大きいため）。
- * ページ数ぶんのドットと前後ボタンを付け、ホイール・トラックパッドでは1ページずつ送る
+ * ページ数ぶんのドットと前後ボタンを付け、ホイール・トラックパッドでは1ページずつ送る。
+ * 項目に data-step があれば、上部に区切り（「Xで話題」「アニソン」など）の切り替えを付ける。
+ * 区切りの違う項目は同じページに積まない
  */
 function setupCarousels() {
 	for (const track of document.querySelectorAll<HTMLElement>(".digest-carousel")) {
@@ -680,8 +682,13 @@ function setupCarousels() {
 		track.before(wrap)
 		const nav = document.createElement("div")
 		nav.className = "digest-carousel-nav"
-		wrap.append(track, nav)
+		const stepBar = document.createElement("div")
+		stepBar.className = "digest-carousel-steps"
+		wrap.append(stepBar, track, nav)
 		track.classList.add("stacked")
+		const stepOf = (i: number) => slides[i].dataset.step ?? ""
+		const steps = [...new Set(slides.map((_, i) => stepOf(i)).filter(Boolean))]
+		if (steps.length === 0) stepBar.remove()
 
 		// pages[i] = i ページ目に置いた項目の番号
 		let pages: number[][] = [[0]]
@@ -738,6 +745,17 @@ function setupCarousels() {
 		count.className = "digest-carousel-count"
 		nav.append(prev, dotList, next, count)
 		let dots: HTMLButtonElement[] = []
+		const stepButtons = steps.map((name) => {
+			const items = slides.flatMap((_, i) => (stepOf(i) === name ? [i] : []))
+			const btn = button("digest-carousel-step", `${name}（${items.length}件）`, name, () =>
+				go(pages.findIndex((page) => page.includes(items[0]))),
+			)
+			const badge = document.createElement("span")
+			badge.textContent = String(items.length)
+			btn.append(badge)
+			return btn
+		})
+		stepBar.append(...stepButtons)
 
 		let shown = -1
 		const update = () => {
@@ -753,6 +771,8 @@ function setupCarousels() {
 			if (dot) {
 				dotList.scrollTo({ left: dot.offsetLeft + dot.offsetWidth / 2 - dotList.clientWidth / 2, behavior: "smooth" })
 			}
+			const currentStep = stepOf(pages[current]?.[0] ?? 0)
+			stepButtons.forEach((btn, i) => btn.setAttribute("aria-current", String(steps[i] === currentStep)))
 			count.textContent = `${current + 1} / ${pages.length}`
 			prev.disabled = current === 0
 			next.disabled = current === lastPage()
@@ -766,8 +786,10 @@ function setupCarousels() {
 			const used: number[] = []
 			pages = []
 			slides.forEach((slide, i) => {
-				// 前のページから順に、収まる最初のページに入れる
-				let page = used.findIndex((h) => h + STACK_GAP + heights[i] <= maxHeight)
+				// 前のページから順に、同じ区切りで収まる最初のページに入れる
+				let page = used.findIndex(
+					(h, p) => h + STACK_GAP + heights[i] <= maxHeight && stepOf(pages[p][0]) === stepOf(i),
+				)
 				if (page === -1) {
 					page = pages.length
 					pages.push([])
@@ -789,6 +811,10 @@ function setupCarousels() {
 				dots = pages.map((_, i) => button("digest-carousel-dot", `${i + 1}ページ目`, "", () => go(i)))
 				dotList.replaceChildren(...dots)
 			}
+			// 区切りの境目のドットに間隔を空ける
+			dots.forEach((dot, i) => {
+				dot.classList.toggle("step-start", i > 0 && stepOf(pages[i][0]) !== stepOf(pages[i - 1][0]))
+			})
 			nav.hidden = pages.length < 2
 			nav.classList.toggle("many", pages.length > MAX_VISIBLE_DOTS)
 			// 並びが変わっても、見ていた項目のページに留まる

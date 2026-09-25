@@ -80,11 +80,18 @@ function thumbnail(c) {
  * 記事を組み立てる。項目はカテゴリ（ジャンルのラベル）ごとにまとめ、categoryOrder の順に
  * 「固定の見出し + 埋め込みのカルーセル」として並べる。
  */
-export function renderArticle({ date, selection, candidatesByKey, category, fixedTags, categoryOrder }) {
+export function renderArticle({ date, selection, candidatesByKey, category, fixedTags, categoryOrder, stepOrder = [] }) {
   const items = selection.items.map((i) => ({ ...i, c: candidatesByKey.get(i.key) }))
   const groups = new Map()
   for (const label of categoryOrder) groups.set(label, [])
   for (const item of items) groups.get(item.c.genreLabel).push(item)
+  // step（カルーセル内の区切り）があるカテゴリは、step の順に並べ、その中はスコア順にする。
+  // ソースが違うとスコアの単位が揃わないので、step をまたいでスコアでは比べない
+  const stepRank = (c) => (c.step ? stepOrder.indexOf(c.step) : -1)
+  for (const list of groups.values()) {
+    if (!list.some(({ c }) => c.step)) continue
+    list.sort((a, b) => stepRank(a.c) - stepRank(b.c) || b.c.score - a.c.score)
+  }
   const sections = [...groups].filter(([, list]) => list.length > 0)
 
   const tags = [...new Set([...fixedTags, category, ...sections.map(([label]) => label)])]
@@ -115,7 +122,7 @@ export function renderArticle({ date, selection, candidatesByKey, category, fixe
 ${list
   .map(
     ({ c }) => `<!-- digest-item ${c.source}:${c.id} -->
-<div class="digest-slide digest-slide-${c.source}">
+<div class="digest-slide digest-slide-${c.source}"${c.step ? ` data-step="${escapeAttr(c.step)}"` : ""}>
 ${embed(c)}
 </div>
 <!-- /digest-item -->

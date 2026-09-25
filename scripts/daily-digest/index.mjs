@@ -52,6 +52,10 @@ const llmProviders = args.llm
       return p
     })
   : config.llm.providers
+const { maxItemsPerCategory, maxItemsByCategory = {} } = config.article
+const categoryLimit = (label) => maxItemsByCategory[label] ?? maxItemsPerCategory
+// カルーセル内の区切りの表示順。genres に最初に出てくる順
+const stepOrder = [...new Set(config.genres.map((g) => g.step).filter(Boolean))]
 const now = new Date()
 const date = resolveTargetDate(args.date, now)
 const window = dayWindowJst(date, now)
@@ -135,7 +139,7 @@ function validateSelection(selection, byKey) {
     const c = byKey.get(item.key)
     if (!c || seen.has(item.key)) continue
     const n = perGenre.get(c.genreLabel) ?? 0
-    if (n >= config.article.maxItemsPerCategory || items.length >= config.article.maxItems) continue
+    if (n >= categoryLimit(c.genreLabel) || items.length >= config.article.maxItems) continue
     seen.add(item.key)
     perGenre.set(c.genreLabel, n + 1)
     items.push(item)
@@ -164,7 +168,7 @@ function renderPrBody({ title, selection, shortlisted, errors, xReads, llm, skip
         ? `❌ ${rejected.get(c.key)}`
         : "―"
     const who = c.source === "x" ? `@${c.author.handle}` : c.author.name
-    return `| ${c.genreLabel} | [${who}](${c.url}) | ${formatMetrics(c)} | ${c.score.toFixed(1)} | ${status.replace(/\|/g, "／")} |`
+    return `| ${c.genreLabel}${c.step ? `／${c.step}` : ""} | [${who}](${c.url}) | ${formatMetrics(c)} | ${c.score.toFixed(1)} | ${status.replace(/\|/g, "／")} |`
   })
 
   return `## ${skippedReason ? "⏭ 記事は生成されませんでした" : `📰 ${title}`}
@@ -193,13 +197,17 @@ ${errors.length ? `### ⚠️ 収集エラー\n${errors.map((e) => `- ${e.genre}
 async function main() {
   const { candidates, errors, xReads } = await collect()
   // 保存済みの候補（--fixture）でも、表示名は現在の config.yaml に合わせる
-  const labelById = new Map(config.genres.map((g) => [g.id, g.label]))
-  for (const c of candidates) c.genreLabel = labelById.get(c.genre) ?? c.genreLabel
+  const genreById = new Map(config.genres.map((g) => [g.id, g]))
+  for (const c of candidates) {
+    const g = genreById.get(c.genre)
+    c.genreLabel = g?.label ?? c.genreLabel
+    c.step = g?.step
+  }
   fs.writeFileSync(path.join(cacheDir, "candidates.json"), JSON.stringify(candidates, null, 2))
 
   const shortlisted = shortlist(candidates)
   const byKey = new Map(shortlisted.map((c) => [c.key, c]))
-  const { minItems, maxItems, maxItemsPerCategory: maxPerCategory } = config.article
+  const { minItems, maxItems } = config.article
 
   const skip = (reason, selection = null, llm = null) => {
     console.log(`[skip] ${reason}`)
@@ -219,14 +227,15 @@ async function main() {
     raw = JSON.parse(fs.readFileSync(args.selection, "utf8"))
     llm = `手動（${args.selection}）`
   } else if (args["mock-llm"]) {
-    raw = mockSelect(shortlisted, { maxItems, maxPerCategory })
+    raw = mockSelect(shortlisted, { maxItems, categoryLimit })
     llm = "モック"
   } else {
     const res = await selectAndWrite(shortlisted, {
       date,
       minItems,
       maxItems,
-      maxPerCategory,
+      maxPerCategory: maxItemsPerCategory,
+      maxItemsByCategory,
       providers: llmProviders,
     })
     raw = res.selection
@@ -246,6 +255,7 @@ async function main() {
     category: config.article.category,
     fixedTags: config.article.tags ?? [],
     categoryOrder: config.article.categoryOrder,
+    stepOrder,
   })
   fs.mkdirSync(config.article.dir, { recursive: true })
   fs.writeFileSync(articlePath, article)

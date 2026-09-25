@@ -3,14 +3,13 @@
 
 article:
   minItems: 5 # これ未満しか採用できなければ記事を作らない
-  maxItems: 16
+  maxItems: 20
   maxItemsPerCategory: 4 # 同じカテゴリはカルーセルにまとめるので、数件まで載せる
+  # カテゴリごとに上限を変える場合（label: 件数）
+  maxItemsByCategory:
+    音楽・MV: 8
   # 記事内でのカテゴリの表示順。genres の label をすべて並べる（抜けていると実行時にエラー）
   categoryOrder:
-    - Xで話題の曲・動画
-    - アニソン・アニメ
-    - ボカロ・歌ってみた
-    - VTuber
     - 音楽・MV
     - 最新AI技術
     - 最新クリエイティブツール
@@ -60,6 +59,8 @@ steam:
   minDiscountPercent: 50
   maxItems: 10
 
+# genres に step を書くと、同じカテゴリのカルーセルの中を step ごとに区切って表示する（上部に区切りの切り替えが出る）。
+# step の表示順は genres に最初に出てくる順で、step の中はスコア順。
 # 並び順 = X の読み取り上限が足りないときの優先順（記事内の表示順は article.categoryOrder）。
 # 上限は X ジャンル（source: x / x-youtube）で xWeight（既定1）の比で分けるが、1ジャンルあたり10件未満になると後ろから順にスキップされる。
 # （YouTube・Steam は上限を消費しないので位置は関係ない。sale は Steam で補えるので X の中では最後）
@@ -67,7 +68,8 @@ genres:
   # X で共有された YouTube 動画を「共有したアカウント数」で並べる。再生数の多い海外コンテンツより、
   # 界隈で話題の曲が上がりやすい。読み取りが多く要るので xWeight で上限の配分を多めにしている
   - id: x-music
-    label: Xで話題の曲・動画
+    label: 音楽・MV
+    step: Xで話題
     source: x-youtube
     query: '(url:youtube.com OR url:youtu.be) (MV OR 新曲 OR 歌ってみた OR ボカロ OR 初音ミク OR アニソン OR 主題歌 OR ノンクレジット OR オリジナル曲 OR 歌枠)'
     xWeight: 3
@@ -78,7 +80,8 @@ genres:
   # 自分で作った X リストのメンバーが貼った YouTube 動画。好みの調整は X アプリでリストを編集するだけでよい。
   # リストは公開にしておく（非公開リストはアプリのトークンでは読めない）。listId は URL の x.com/i/lists/<ID>
   - id: x-list-music
-    label: Xで話題の曲・動画
+    label: 音楽・MV
+    step: Xで話題
     source: x-youtube
     listId: ""
     maxReads: 200
@@ -137,34 +140,39 @@ genres:
     label: セール
     source: steam
 
-  # YouTube の検索は再生数順なので、枠を分けないと大型アーティストが全部持っていく。
-  # search.list は1回100ユニット（1日1万ユニットまで）
+  # YouTube の検索は再生数順なので、1つの検索にまとめると大型アーティストが上位を占める。
+  # 検索を分けて候補を確保する。search.list は1回100ユニット（1日1万ユニットまで）
   - id: anison
-    label: アニソン・アニメ
+    label: 音楽・MV
+    step: アニソン
     source: youtube
     # アニメ公式チャンネルは「音楽」以外のカテゴリで上げることが多いのでカテゴリは絞らない
     q: "ノンクレジット|アニメ主題歌|アニソン|TVアニメ|オープニング映像|エンディング映像"
 
   - id: vocaloid
-    label: ボカロ・歌ってみた
+    label: 音楽・MV
+    step: ボカロ・歌ってみた
     source: youtube
     videoCategoryId: "10"
     q: "ボカロ|ボーカロイド|VOCALOID|初音ミク|重音テト|可不|歌ってみた"
 
   - id: vtuber
-    label: VTuber
+    label: 音楽・MV
+    step: VTuber
     source: youtube
     videoCategoryId: "10"
     q: "VTuber|ホロライブ|hololive|にじさんじ|ぶいすぽ|オリジナル曲"
 
   - id: mv
     label: 音楽・MV
+    step: MV・新曲
     source: youtube
     videoCategoryId: "10"
     q: "MV|ミュージックビデオ|Music Video"
 
   - id: music
     label: 音楽・MV
+    step: MV・新曲
     source: youtube
     videoCategoryId: "10"
     q: ""
