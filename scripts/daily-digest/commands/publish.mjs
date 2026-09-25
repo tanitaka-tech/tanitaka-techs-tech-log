@@ -8,6 +8,7 @@ import fs from "node:fs"
 import { CURATION_PATH } from "../lib/curation.mjs"
 import { readJson } from "../lib/context.mjs"
 import { resolveKey } from "../lib/review.mjs"
+import { render } from "./render.mjs"
 
 function run(cmd, args, { capture = false } = {}) {
   console.log(`$ ${cmd} ${args.join(" ")}`)
@@ -55,6 +56,8 @@ export function publish(ctx, { skipBuild = false, noMerge = false } = {}) {
   if (current !== "develop" && current !== branch) {
     throw new Error(`develop か ${branch} ブランチで実行してください（現在: ${current}）`)
   }
+  // プレビュー用の警告を消した公開用の記事に書き直す（上限を超えた項目が残っていればここで止まる）
+  render(ctx, { final: true, force: true })
   const title = articleTitle(articlePath)
 
   if (!skipBuild) run("pnpm", ["build"])

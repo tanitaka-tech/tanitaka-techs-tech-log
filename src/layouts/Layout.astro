@@ -641,8 +641,11 @@ document.addEventListener(
 const DIGEST_CHEVRON =
 	'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>'
 
-/** カテゴリの見出しに件数と開閉ボタンを付ける。見出しのどこを押しても開閉できる（# のリンクは除く） */
-function setupDigestHeading(heading: HTMLElement, body: HTMLElement, count: number) {
+/**
+ * カテゴリの見出しに件数と開閉ボタンを付ける。見出しのどこを押しても開閉できる（# のリンクは除く）。
+ * initiallyOpen が false なら閉じた状態で表示する（記事末尾のニュースなど）
+ */
+function setupDigestHeading(heading: HTMLElement, body: HTMLElement, count: number, initiallyOpen = true) {
 	const section = heading.parentElement
 	const title = heading.firstChild?.textContent?.trim() ?? ""
 	const countLabel = document.createElement("span")
@@ -663,7 +666,7 @@ function setupDigestHeading(heading: HTMLElement, body: HTMLElement, count: numb
 		body.inert = !open
 		if (!open) for (const { frame, pause } of mediaPlayers) if (body.contains(frame)) pause()
 	}
-	setOpen(true)
+	setOpen(initiallyOpen)
 	heading.addEventListener("click", (e) => {
 		if (e.target instanceof Element && e.target.closest("a")) return
 		setOpen(toggle.getAttribute("aria-expanded") !== "true")
@@ -773,7 +776,7 @@ function setupDigestLists() {
 		inner.append(content)
 		content.append(divider)
 		const heading = panel.closest("section")?.querySelector<HTMLElement>(":scope > h2")
-		if (heading) setupDigestHeading(heading, body, entries.length)
+		if (heading) setupDigestHeading(heading, body, entries.length, panel.dataset.collapsed !== "true")
 		if (entries.length < 2) {
 			content.append(panel)
 			continue

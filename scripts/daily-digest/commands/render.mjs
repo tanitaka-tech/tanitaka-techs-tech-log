@@ -1,6 +1,10 @@
 /*
  * selection.json（Claude Code か select コマンドが書いた選定結果）から記事の Markdown を作る。
  * タイトル・説明の添削も selection.json の topic / description を直して render し直す。
+ *
+ * 既定はプレビュー用: 候補を上限で削らずにすべて載せ、項目ごとの注意（note）と警告の一覧を記事に表示する。
+ * 人間はプレビューを見てから載せる項目を決める。--final（publish が自動で使う）では警告を出さず、
+ * 上限を超えていればエラーにする。
  */
 import { spawnSync } from "node:child_process"
 import fs from "node:fs"
@@ -13,7 +17,7 @@ function isTracked(file) {
   return spawnSync("git", ["ls-files", "--error-unmatch", file], { stdio: "ignore" }).status === 0
 }
 
-export function render(ctx, { force = false } = {}) {
+export function render(ctx, { force = false, final = false } = {}) {
   const { config, date, articlePath, categoryLimit } = ctx
   if (isTracked(articlePath) && !force) {
     throw new Error(`${articlePath} はコミット済みです。上書きするときは --force を付けてください`)
@@ -24,6 +28,8 @@ export function render(ctx, { force = false } = {}) {
   const raw = readJson(ctx.paths.selection)
 
   const warnings = []
+  // 上限を超えているカテゴリ・記事全体
+  const overLimit = []
   const perCategory = new Map()
   const seen = new Set()
   const items = []
@@ -43,18 +49,19 @@ export function render(ctx, { force = false } = {}) {
     }
     if (seen.has(key)) continue
     const label = e.c.genreLabel
-    const n = perCategory.get(label) ?? 0
-    if (n >= categoryLimit(label)) {
-      warnings.push(`#${e.no}: ${label} の上限 ${categoryLimit(label)} 件を超えるので外しました`)
-      continue
-    }
-    if (items.length >= config.article.maxItems) {
-      warnings.push(`#${e.no}: 記事全体の上限 ${config.article.maxItems} 件を超えるので外しました`)
-      continue
-    }
     seen.add(key)
-    perCategory.set(label, n + 1)
+    perCategory.set(label, (perCategory.get(label) ?? 0) + 1)
     items.push({ ...item, key })
+  }
+  // プレビューでは上限を超えても載せ、どれを外すか人間が決められるようにする（カテゴリ・記事全体ごとに1行で知らせる）
+  for (const [label, n] of perCategory) {
+    if (n > categoryLimit(label)) overLimit.push(`${label}: ${n}件（上限 ${categoryLimit(label)}件）`)
+  }
+  if (items.length > config.article.maxItems) {
+    overLimit.push(`記事全体: ${items.length}件（上限 ${config.article.maxItems}件）`)
+  }
+  if (final && overLimit.length) {
+    throw new Error(`上限を超えている項目があります。selection.json から外してください:\n${overLimit.join("\n")}`)
   }
   if (items.length === 0) throw new Error("掲載できる項目がありません")
   if (items.length < config.article.minItems) {
@@ -74,9 +81,21 @@ export function render(ctx, { force = false } = {}) {
     topicKey = items[0].key
   }
 
+  const collected = readJson(ctx.paths.collect, {})
+  // プレビューの記事の先頭に出す警告。公開する記事（--final）には出さない
+  const reviewWarnings = final
+    ? null
+    : [
+        ...(collected.errors ?? []).map((e) => `収集エラー: ${e.genre}（${e.message.slice(0, 60)}）`),
+        ...warnings,
+        ...overLimit,
+        ...items.filter((i) => i.note).map((i) => `#${numbers[i.key]}: ${i.note}`),
+        ...(raw.news ?? []).filter((n) => n.note).map((n) => `ニュース「${n.title}」: ${n.note}`),
+      ]
   const article = renderArticle({
     date,
-    selection: { topic, topicKey, description: raw.description ?? "", items },
+    selection: { topic, topicKey, description: raw.description ?? "", items, news: raw.news ?? [] },
+    review: reviewWarnings,
     candidatesByKey: new Map([...available].map(([k, e]) => [k, e.c])),
     category: config.article.category,
     fixedTags: config.article.tags ?? [],
@@ -86,9 +105,10 @@ export function render(ctx, { force = false } = {}) {
   fs.mkdirSync(config.article.dir, { recursive: true })
   fs.writeFileSync(articlePath, article)
 
-  console.log(`${articlePath} を書き出しました: ${topic} ${date}`)
+  console.log(`${articlePath} を書き出しました${final ? "（公開用）" : "（プレビュー用。警告を記事に表示しています）"}: ${topic} ${date}`)
   for (const [label, n] of perCategory) console.log(`  ${label}: ${n}件`)
+  if (raw.news?.length) console.log(`  ニュース: ${raw.news.length}件`)
   for (const i of items.filter((i) => i.note)) console.log(`  ⚠️ #${numbers[i.key]} ${i.note}`)
-  for (const w of warnings) console.log(`  ⚠️ ${w}`)
+  for (const w of [...warnings, ...overLimit]) console.log(`  ⚠️ ${w}`)
   console.log(`\nプレビュー（pnpm dev）: http://localhost:4321/tanitaka-techs-tech-log/posts/daily-digest/${date}/`)
 }
