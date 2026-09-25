@@ -21,6 +21,7 @@ article:
     - セール
     - 伸びているイラスト
     - 風景写真
+    - Misskeyで話題
   category: デイリーダイジェスト
   # 手書きの記事と見分けるため、生成記事に必ず付けるタグ
   tags: [自動生成]
@@ -210,14 +211,6 @@ genres:
     videoCategoryId: "10"
     q: "ボカロ|ボーカロイド|VOCALOID|初音ミク|重音テト|可不|オリジナル曲"
 
-  - id: vtuber
-    label: 音楽・MV
-    step: VTuber
-    source: youtube
-    videoCategoryId: "10"
-    # ショート・配信を除くとほとんど残らなかったので、オリジナル曲・MV に寄せる
-    q: "VTuber オリジナル曲|VTuber MV|ホロライブ オリジナル曲|にじさんじ オリジナル曲|ぶいすぽ オリジナル曲|Vsinger"
-
   - id: mv
     label: 音楽・MV
     step: MV・新曲
@@ -244,3 +237,48 @@ genres:
     pages: 2 # 1回の検索で読むページ数（1ページ50曲）
     maxTrackAgeDays: 7
     minLikes: 5
+
+  # ---- X API の代わり（2026-09-26〜）----
+  # はてなブックマークの人気エントリー（カテゴリ別 RSS）。include に当たる記事をブックマーク数の伸び率で並べる。
+  # categories: it（テクノロジー）/ game（アニメとゲーム）/ knowledge（学び）/ entertainment など
+  - id: hatena-ai
+    label: 最新AI技術
+    source: hatena
+    categories: [it]
+    # 大文字小文字は区別する。AI は英単語の途中（EXPLAIN など）に当たらないよう \b で区切る
+    include: "\\bAI\\b|ＡＩ|\\bLLM|生成AI|ChatGPT|Claude|Gemini|OpenAI|Anthropic|機械学習|AIエージェント|Copilot"
+    # 生成AIの是非をめぐる言い争いは載せない
+    exclude: "規制|反AI|盗用|窃盗|炎上"
+    minBookmarks: 30
+
+  - id: hatena-tools
+    label: 最新クリエイティブツール
+    source: hatena
+    categories: [it, game, knowledge]
+    include: "Blender|Photoshop|CLIP STUDIO|クリスタ|Figma|After Effects|Premiere|DaVinci|Procreate|Live2D|Unity|Unreal Engine|Krita|ZBrush|Illustrator|Adobe|Godot|Aseprite|3DCG|フォント|描き方|お絵描き"
+    # 規約・決済をめぐる騒動は「ネットで話題のニュース」で扱う
+    exclude: "炎上|騒動|規制|検閲|決済"
+    minBookmarks: 20
+
+  - id: hatena-games
+    label: 最新ゲーム
+    source: hatena
+    categories: [game]
+    include: "ゲーム|Switch|PS5|Xbox|Steam|任天堂|ニンテンドー|体験版|インディー|RPG"
+    minBookmarks: 20
+
+  # Bluesky の人気の投稿（イラスト）。AI 絵はタグ・投稿者名で除く
+  - id: bluesky-illust
+    label: 伸びているイラスト
+    source: bluesky
+    queries: ["#イラスト", "#絵描きさんと繋がりたい", "#一次創作", "#創作", "#落書き", "#illustration"]
+    requireImages: true
+    minLikes: 100
+    exclude: "AIイラスト|AIart|aiart|AI生成|AIグラビア|StableDiffusion|NovelAI|nijijourney|使用モデル|#NSFW|R-?18|_AI\\b|AI$"
+
+  # Misskey.io の人気ノート（検証中）。注意書き（CW）・センシティブ指定の画像があるノートは除く
+  - id: misskey
+    label: Misskeyで話題
+    source: misskey
+    host: misskey.io
+    minReactions: 50

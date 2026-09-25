@@ -123,6 +123,9 @@ export function formatMetrics(c) {
   const m = c.metrics
   if (c.source === "x") return `♥${fmt(m.like_count)} RT${fmt(m.retweet_count)} 👁${m.impression_count != null ? fmt(m.impression_count) : "-"}`
   if (c.source === "youtube") return `▶${fmt(m.views)} 👍${fmt(m.likes)}${m.sharers ? ` 🔗${m.sharers}人` : ""}`
+  if (c.source === "hatena") return `🔖${fmt(m.bookmarks)}users`
+  if (c.source === "bluesky") return `♥${fmt(m.likes)} RP${fmt(m.reposts)}`
+  if (c.source === "misskey") return `😀${fmt(m.reactions)} RN${fmt(m.renotes)}${c.images?.length ? ` 🖼${c.images.length}` : ""}`
   if (c.source === "soundcloud") return `▶${fmt(m.plays)} ♥${fmt(m.likes)}${m.sharers ? ` 🔗${m.sharers}人` : ""}`
   return `-${m.discountPercent}%`
 }
@@ -136,7 +139,7 @@ function formatEntry(e, selected) {
   const c = e.c
   const marks = `${selected.has(c.key) ? "✅" : ""}${e.pinned ? "📌" : ""}`
   const weight = e.weight !== 1 ? `（×${Number(e.weight.toFixed(3))}）` : ""
-  const who = c.source === "x" ? `${c.author.name} @${c.author.handle}` : c.author.name
+  const who = ["x", "bluesky", "misskey"].includes(c.source) ? `${c.author.name} @${c.author.handle}` : c.author.name
   const lines = [
     `#${e.no ?? "-"} ${marks}${marks ? " " : ""}${c.score.toFixed(2)}${weight} ${formatMetrics(c)} | ${who} [author:${authorKey(c)}] {${c.genre}}`,
     `    ${oneLine(c.title || c.text, 90)}`,

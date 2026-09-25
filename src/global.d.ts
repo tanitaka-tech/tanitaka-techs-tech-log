@@ -4,6 +4,8 @@ declare global {
 	interface Window {
 		// type from '@swup/astro' is incorrect
 		swup: AstroIntegration;
+		// Bluesky の埋め込み用 embed.js
+		bluesky?: { scan: () => void };
 		// X の埋め込み用 widgets.js
 		twttr?: { widgets: { load: (el?: Element) => void } };
 		// YouTube IFrame Player API（ダイジェストの動画を同時に再生させないため）

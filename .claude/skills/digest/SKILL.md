@@ -5,7 +5,7 @@ description: デイリーダイジェスト記事を手元で作って公開す�
 
 # デイリーダイジェストを作る
 
-X・YouTube・SoundCloud・Steam で伸びた投稿から記事 `src/content/posts/daily-digest/<date>.md` を作る。
+はてなブックマーク・Bluesky・Misskey・YouTube・SoundCloud・Steam で伸びた投稿・記事から記事 `src/content/posts/daily-digest/<date>.md` を作る。
 **載せるかどうかを決めるのは人間**。Claude は候補を整理して提案し、指示どおりにルールや選定を直す。黙って候補を落とさない。
 
 候補は**実行時点から直近24時間**の投稿・動画（`config.yaml` の `collect.windowHours`）。`<date>` は記事の日付で、今日（JST）。

@@ -69,6 +69,25 @@ function soundcloudPlays(c) {
 /** SoundCloud のアートワーク URL（-t500x500 など）のサイズを差し替える */
 const soundcloudArtwork = (url, size) => url?.replace(/-t500x500\.(\w+)$/, `-${size}.$1`)
 
+/** はてなブックマークの記事のリンクカード（はてなのエントリー画像・タイトル・サイト名・ブックマーク数） */
+function hatenaCard(c) {
+  return `<a class="digest-link-card no-styling" href="${escapeAttr(c.url)}" target="_blank" rel="noopener"><img class="no-lightbox" src="${escapeAttr(thumbnail(c))}" alt="" loading="lazy"><span class="digest-link-body"><span class="digest-link-title">${escapeText(c.title)}</span><span class="digest-link-meta">${escapeText(c.author.name)} · はてなブックマーク ${c.metrics?.bookmarks ?? 0}users</span></span></a>`
+}
+
+/**
+ * Misskey のノートのカード。Misskey の埋め込みは他サイトの iframe に出せないので自前で描く。
+ * カスタム絵文字（:emoji:）は消して表示する
+ */
+/** Misskey のカスタム絵文字（:name:）は画像がないと読めないので消す */
+const stripEmoji = (s) => (s ?? "").replace(/:[a-z0-9_+-]+:/gi, "").replace(/[ \t]{2,}/g, " ").trim()
+
+function misskeyCard(c) {
+  const images = (c.images ?? [])
+    .map((src) => `<img class="no-lightbox" src="${escapeAttr(src)}" alt="" loading="lazy">`)
+    .join("")
+  return `<a class="digest-misskey-card no-styling" href="${escapeAttr(c.url)}" target="_blank" rel="noopener"><span class="digest-misskey-author">${c.author.avatar ? `<img class="no-lightbox" src="${escapeAttr(c.author.avatar)}" alt="" loading="lazy">` : ""}<span><strong>${escapeText(stripEmoji(c.author.name) || c.author.handle)}</strong> @${escapeText(c.author.handle)}</span></span>${stripEmoji(c.text) ? `<span class="digest-misskey-text">${escapeText(stripEmoji(c.text))}</span>` : ""}${images ? `<span class="digest-misskey-images n${Math.min(c.images.length, 4)}">${images}</span>` : ""}<span class="digest-misskey-meta">リアクション ${c.metrics?.reactions ?? 0} · リノート ${c.metrics?.renotes ?? 0} · ${escapeText(c.host ?? "misskey.io")}</span></a>`
+}
+
 function embed(c) {
   switch (c.source) {
     case "x":
@@ -84,6 +103,13 @@ function embed(c) {
       return `<a class="digest-soundcloud-facade no-styling" href="${escapeAttr(c.url)}" data-track-id="${escapeAttr(c.id)}" data-title="${escapeAttr(c.title)}" target="_blank" rel="noopener"><img class="digest-soundcloud-bg no-lightbox" src="${escapeAttr(thumbnail(c))}" alt="" aria-hidden="true" loading="lazy"><img class="digest-soundcloud-art no-lightbox" src="${escapeAttr(thumbnail(c))}" alt="${escapeAttr(c.title)}" loading="lazy"><span class="digest-soundcloud-title">${escapeText(c.title)}<span class="digest-soundcloud-author">${escapeText(c.author.name)}</span></span><span class="digest-soundcloud-play" aria-hidden="true"></span>${soundcloudPlays(c)}</a>`
     case "steam":
       return steamCard(c)
+    case "hatena":
+      return hatenaCard(c)
+    case "bluesky":
+      // 公式の埋め込み（embed.bsky.app の embed.js が iframe に差し替える。読み込みは Layout.astro）
+      return `<blockquote class="bluesky-embed" data-bluesky-uri="${escapeAttr(c.uri)}" data-bluesky-cid="${escapeAttr(c.cid)}"><a href="${escapeAttr(c.url)}">@${escapeText(c.author.handle)} さんの Bluesky の投稿を見る</a></blockquote>`
+    case "misskey":
+      return misskeyCard(c)
     default:
       throw new Error(`unknown source: ${c.source}`)
   }
@@ -103,11 +129,14 @@ function tocLabel(c) {
   switch (c.source) {
     case "youtube":
     case "soundcloud":
+    case "hatena":
       return { label: c.title, meta: c.author.name }
     case "steam": {
       const sale = steamSale(c)
       return { label: c.title, meta: sale ? `-${sale.discountPercent}% ${yen(sale.finalPrice)}` : "Steam" }
     }
+    case "misskey":
+      return { label: stripEmoji(c.author.name) || c.author.handle, meta: `@${c.author.handle}` }
     default:
       return { label: c.author.name, meta: `@${c.author.handle}` }
   }
@@ -116,7 +145,7 @@ function tocLabel(c) {
 /** 目次に小さく出す画像。YouTube は軽い 320px 版、SoundCloud は 300px のアートワーク、X は投稿者のアイコン（収集時に取れたときだけ） */
 function tocThumb(c) {
   if (c.source === "youtube") return `https://i.ytimg.com/vi/${c.id}/mqdefault.jpg`
-  if (c.source === "x") return c.author.avatar
+  if (c.source === "x" || c.source === "bluesky" || c.source === "misskey") return c.author.avatar
   if (c.source === "soundcloud") return soundcloudArtwork(thumbnail(c), "t300x300")
   return thumbnail(c)
 }
@@ -239,7 +268,7 @@ ${review ? reviewBanner(review) : ""}${body}
 ${newsSection(selection.news, review)}
 ---
 
-この記事は、X・YouTube・SoundCloud・Steam の公開データをもとに AI が掲載候補を選び、筆者が内容を確認したうえで公開しています。掲載した投稿や動画の権利は各投稿者に帰属します。削除や掲載取りやめのご希望は、ブログのお問い合わせ先までご連絡ください。
+この記事は、はてなブックマーク・Bluesky・Misskey・YouTube・SoundCloud・Steam などの公開データをもとに AI が掲載候補を選び、筆者が内容を確認したうえで公開しています。掲載した投稿や動画の権利は各投稿者に帰属します。削除や掲載取りやめのご希望は、ブログのお問い合わせ先までご連絡ください。
 `
 }
 
