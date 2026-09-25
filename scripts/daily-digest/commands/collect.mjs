@@ -33,30 +33,35 @@ async function fetchAll(ctx) {
   }
   const candidates = []
   const errors = []
+  // ジャンルごとの X 読み取り件数と候補数。review で歩留まりを出し、クエリの調整に使う
+  const stats = {}
   for (const genre of config.genres) {
+    const before = budget.remaining
+    const drops = {}
     try {
       let found = []
       if (genre.source === "x") {
-        found = await searchXGenre(genre, window, config, requireEnv("X_BEARER_TOKEN"), budget, now, takeShare(genre))
+        found = await searchXGenre(genre, window, config, requireEnv("X_BEARER_TOKEN"), budget, now, takeShare(genre), drops)
       } else if (genre.source === "x-youtube") {
         const keys = { xToken: requireEnv("X_BEARER_TOKEN"), ytKey: requireEnv("YOUTUBE_API_KEY") }
-        found = await collectXYoutubeGenre(genre, window, config, keys, budget, now, takeShare(genre))
+        found = await collectXYoutubeGenre(genre, window, config, keys, budget, now, takeShare(genre), drops)
       } else if (genre.source === "soundcloud") {
-        found = await searchSoundcloudGenre(genre, now)
+        found = await searchSoundcloudGenre(genre, now, drops)
       } else if (genre.source === "youtube") {
-        found = await searchYoutubeGenre(genre, window, config, requireEnv("YOUTUBE_API_KEY"), now)
+        found = await searchYoutubeGenre(genre, window, config, requireEnv("YOUTUBE_API_KEY"), now, drops)
       } else if (genre.source === "steam" && config.steam.enabled) {
         found = await fetchSteamSales(genre, config)
       }
       console.log(`[collect] ${genre.id}: ${found.length}件`)
       candidates.push(...found)
+      stats[genre.id] = { reads: before - budget.remaining, candidates: found.length, drops }
     } catch (e) {
       // 1ジャンルの失敗で全体を止めない
       console.error(`[collect] ${genre.id} 失敗: ${e.message}`)
       errors.push({ genre: genre.id, message: e.message })
     }
   }
-  return { candidates, errors, window, xReads: config.x.maxPostsPerRun - budget.remaining }
+  return { candidates, errors, stats, window, xReads: config.x.maxPostsPerRun - budget.remaining }
 }
 
 export async function collect(ctx, { force = false, fixture } = {}) {
@@ -79,7 +84,7 @@ export async function collect(ctx, { force = false, fixture } = {}) {
   if (ctx.date !== todayJst(ctx.now)) {
     throw new Error(`収集は実行時点から直近の投稿が対象なので、--date には今日（${todayJst(ctx.now)}）しか指定できません`)
   }
-  const { candidates, errors, window, xReads } = await fetchAll(ctx)
+  const { candidates, errors, stats, window, xReads } = await fetchAll(ctx)
   // すべて失敗したときに空の候補を保存すると、次回から取り直されなくなるので保存しない
   if (candidates.length === 0) throw new Error("候補が1件も集まりませんでした（保存していません）")
   writeJson(paths.candidates, candidates)
@@ -88,6 +93,7 @@ export async function collect(ctx, { force = false, fixture } = {}) {
     window: { start: window.start.toISOString(), end: window.end.toISOString() },
     xReads,
     maxPostsPerRun: ctx.config.x.maxPostsPerRun,
+    stats,
     errors,
   })
   console.log(`\n候補 ${candidates.length}件を ${paths.candidates} に保存しました（X 読み取り ${xReads} / ${ctx.config.x.maxPostsPerRun}）`)

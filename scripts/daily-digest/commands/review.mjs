@@ -1,5 +1,6 @@
 import fs from "node:fs"
 import { readJson } from "../lib/context.mjs"
+import { listItemsByFile } from "../lib/render.mjs"
 import { formatReview, resolveKey, runReview } from "../lib/review.mjs"
 
 export function review(ctx, { all = false } = {}) {
@@ -31,7 +32,31 @@ export function review(ctx, { all = false } = {}) {
     `\n候補一覧 ${shortlisted}件 / ルールで除外 ${blocked}件${all ? "" : "（--all で除外・圏外も表示）"}` +
       `${expired ? ` / 期限切れのルール ${expired}件` : ""}`,
   )
+  if (collected.stats) console.log(formatYield(ctx, entries, collected.stats))
   console.log(`詳細（本文・共有者など）: ${ctx.paths.shortlist}`)
   if (selection) console.log(`選定: ${ctx.paths.selection}（${selection.items?.length ?? 0}件）`)
   if (fs.existsSync(ctx.articlePath)) console.log(`記事: ${ctx.articlePath}`)
+}
+
+/**
+ * ジャンルごとの歩留まり（X 読み取り → 候補 → ルールで残った件数 → 記事に載った件数）。
+ * 読み取りのわりに残らないジャンルは、クエリを絞るか読み取りの配分を減らす
+ */
+function formatYield(ctx, entries, stats) {
+  const published = new Set(listItemsByFile(ctx.config.article.dir).find((f) => f.file === ctx.articlePath)?.keys)
+  const lines = ["\n## ジャンルごとの歩留まり（X 読み取り → 候補 → ルール適用後 → 記事に掲載）"]
+  for (const g of ctx.config.genres) {
+    const s = stats[g.id]
+    if (!s) continue
+    const mine = entries.filter((e) => e.c.genre === g.id)
+    const kept = mine.filter((e) => !e.excluded).length
+    const picked = mine.filter((e) => published.has(e.c.key)).length
+    const reads = s.reads ? `${s.reads}件読み → ` : ""
+    const rate = s.reads ? `（読み取り100件あたり ${((kept / s.reads) * 100).toFixed(1)}件）` : ""
+    lines.push(`- ${g.id}: ${reads}候補 ${s.candidates} → ${kept} → 掲載 ${picked}${rate}`)
+    // 収集で外した理由の内訳。多い理由の条件（いいね数・期間など）を見直す
+    const drops = Object.entries(s.drops ?? {}).sort((a, b) => b[1] - a[1])
+    if (drops.length) lines.push(`    収集で除外: ${drops.map(([r, n]) => `${r} ${n}`).join(" / ")}`)
+  }
+  return lines.join("\n")
 }

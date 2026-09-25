@@ -52,6 +52,8 @@ x:
   minLikes: 30
   # 全クエリ共通で付与する条件
   baseQuery: "lang:ja -is:retweet -is:reply"
+  # sampleRetweets のジャンルでリツイートを検索するときに付ける条件（is:retweet は自動で付く）
+  retweetBaseQuery: "lang:ja"
 
 youtube:
   regionCode: JP
@@ -60,6 +62,8 @@ youtube:
   minViews: 1000
   # タイトルかチャンネル名に仮名（ひらがな・カタカナ）がある動画だけ残す。ジャンルごとに上書きできる
   requireKana: true
+  excludeShorts: true # ショート動画を除く（/shorts/<ID> が開けるかで判定する）
+  maxDurationMinutes: 15 # これより長い動画（歌枠・雑談などの配信アーカイブ）を除く
 
 steam:
   enabled: true
@@ -78,10 +82,13 @@ genres:
     label: 音楽・MV
     step: Xで話題
     source: x-youtube
-    query: '(url:youtube.com OR url:youtu.be) (MV OR 新曲 OR 歌ってみた OR ボカロ OR 初音ミク OR アニソン OR 主題歌 OR ノンクレジット OR オリジナル曲 OR 歌枠)'
+    # カバー曲（歌ってみた・歌枠）は載せないので、検索の段階で除いて読み取りを節約する。
+    # 「MV制作」「映像担当」などは、MV を作ったクリエイターが自分の仕事として紹介する投稿を拾うため
+    query: '(url:youtube.com OR url:youtu.be) (MV OR 新曲 OR ボカロ OR 初音ミク OR アニソン OR 主題歌 OR ノンクレジット OR オリジナル曲 OR "MV制作" OR "映像担当" OR "映像制作") -歌ってみた -歌枠 -cover -カバー'
     xWeight: 3
     maxReads: 200
     minSharers: 2 # 1人しか貼っていない動画は宣伝の可能性が高いので除く
+    minFollowers: 500 # フォロワーが少ないアカウントの共有は数えない（宣伝用・捨てアカウント対策）
     maxVideoAgeDays: 7 # 共有は当日でも、動画の公開がこれより古いものは除く
 
   # 自分で作った X リストのメンバーが貼った YouTube 動画。好みの調整は X アプリでリストを編集するだけでよい。
@@ -95,16 +102,29 @@ genres:
     minSharers: 1
     maxVideoAgeDays: 7
 
+  # ai・illust・landscape はキーワードに当たる投稿が多すぎて、関連度順に50件読んでもいいね数の条件に
+  # ほとんど届かなかった。sampleRetweets でリツイートを読み、よくリツイートされている投稿（人気の投稿）を拾う。
+  #   sampleSlices:    対象期間をいくつの区間に分けて読むか（既定6。読み取りが足りなければ減らす）
+  #   maxPostAgeHours: リツイート元の投稿を何時間前まで許すか（既定72）
+  #   mediaTypes:      リツイート元の添付メディアの種類（photo / video / animated_gif）を絞る
+  #   excludeVerifiedTypes: 除く認証の種類。business（企業・団体）を除くと、公式アカウントの告知が減る
+  # exclude は本文・投稿者名に対する正規表現で、当たる投稿は除く
   - id: ai
     label: 最新AI技術
     source: x
+    sampleRetweets: true
+    xWeight: 2 # リツイートの標本が多いほど人気の投稿が重なって見えるので、読み取りを多めに配分する
+    maxReads: 100
     # AIで生成したイラストの作品投稿は載せないので、検索の段階で除く
-    query: '(生成AI OR LLM OR ChatGPT OR Claude OR Gemini OR "AIモデル" OR "画像生成AI" OR "動画生成AI") -AIイラスト -AIart -nijijourney -AIグラビア'
+    query: '(生成AI OR LLM OR ChatGPT OR Claude OR Gemini OR "AIモデル" OR "画像生成AI" OR "動画生成AI") -AIイラスト -AIart -nijijourney -AIグラビア -キャンペーン -プレゼント'
+    # 生成AIの是非をめぐる言い争いと、副業・情報商材の宣伝も除く
+    exclude: "AIイラスト|AIart|aiart|nijijourney|NovelAI|AIグラビア|#NSFW|キャンペーン|プレゼント|抽選|盗難|窃盗|犯罪|搾取|信者|月\\d+万|稼げ|副業|note販売"
 
   - id: creative-tools
     label: 最新クリエイティブツール
     source: x
-    query: '(Blender OR Photoshop OR "CLIP STUDIO" OR クリスタ OR Figma OR "After Effects" OR "DaVinci Resolve" OR Procreate) (新機能 OR アップデート OR リリース OR 発表)'
+    # 騒動・規約変更などの話題に巻き込まれないよう、リリース・新機能の告知に寄せる
+    query: '(Blender OR Photoshop OR "CLIP STUDIO" OR クリスタ OR Figma OR "After Effects" OR "DaVinci Resolve" OR Procreate OR Live2D OR Unity OR "Unreal Engine" OR Krita OR ZBrush) (新機能 OR アップデート OR リリース OR 正式リリース OR 正式版 OR ベータ版 OR 新バージョン OR 搭載 OR 配信開始) -騒動 -炎上 -規約 -改悪 -AIイラスト'
 
   - id: tool-tips
     label: ツールの使い方・使いこなし術
@@ -114,18 +134,38 @@ genres:
   - id: games
     label: 最新ゲーム
     source: x
+    # ゲームのニュースはリツイートで広まるので、人気の投稿を拾う（関連度順では50件読んで候補2件だった）
+    sampleRetweets: true
+    maxReads: 80
     query: '(新作ゲーム OR 発売日 OR 配信開始 OR 新作発表 OR "Nintendo Direct" OR Steam) (ゲーム OR Switch OR PS5 OR Steam)'
 
   - id: illust
     label: 伸びているイラスト
     source: x
-    query: "(イラスト OR 絵描きさんと繋がりたい OR 落書き) has:images -is:quote -AIイラスト -AIart -nijijourney"
+    sampleRetweets: true
+    xWeight: 2 # リツイートの標本が多いほど人気の投稿が重なって見えるので、読み取りを多めに配分する
+    maxReads: 100
+    mediaTypes: [photo, animated_gif] # 画像の投稿だけ（動画は MV・PV が多いので除く）
+    # アニメ・ゲーム・くじなどの公式アカウントの告知が多く上がるので、個人の作品に寄せる
+    excludeVerifiedTypes: [business, government]
+    query: "(イラスト OR 絵描きさんと繋がりたい OR 落書き OR オリジナルイラスト OR 創作) -AIイラスト -AIart -nijijourney -キャンペーン -抽選 -プレゼント -グッズ -募集"
+    # AI 絵のアカウントは名前に AI を入れていることが多いので、投稿者名も見る
+    exclude: "AIイラスト|AIart|aiart|nijijourney|NovelAI|StableDiffusion|#NSFW|_AI\\b|AI$|キャンペーン|抽選|プレゼント|POP ?UP|グッズ|募集|予約|くじ|発売|開催|放送|ご視聴"
     minLikes: 500
 
   - id: landscape
     label: 風景写真
     source: x
-    query: "(風景写真 OR 写真好きな人と繋がりたい OR ファインダー越しの私の世界 OR 絶景 OR 夕焼け) has:images -is:quote -AIイラスト -AIart -AI写真 -AI生成"
+    sampleRetweets: true
+    xWeight: 2 # リツイートの標本が多いほど人気の投稿が重なって見えるので、読み取りを多めに配分する
+    maxReads: 100
+    mediaTypes: [photo] # 写真だけ
+    # テレビ番組・写真集・アイドルなどの告知が「絶景」「夕焼け」に当たるので、公式アカウントは除く
+    excludeVerifiedTypes: [business, government]
+    query: "(風景写真 OR 写真好きな人と繋がりたい OR ファインダー越しの私の世界 OR 絶景 OR 夕焼け OR 星景写真) -AIイラスト -AIart -AI写真 -AI生成 -キャンペーン -抽選 -プレゼント"
+    # 「絶景」「夕焼け」はイラスト・舞台の告知・人物の撮影会にも当たるので、それらを除く
+    # （写真のハッシュタグだけに絞ると、候補がほとんど残らなかった）
+    exclude: "AIイラスト|AIart|AI写真|AI生成|キャンペーン|抽選|プレゼント|イラスト|Illustration|舞台|公演|撮影会|ポートレート|コスプレ|写真集|先行カット|放送|出演|企画"
     minLikes: 300
 
   - id: expression
@@ -161,7 +201,7 @@ genres:
     step: ボカロ・歌ってみた
     source: youtube
     videoCategoryId: "10"
-    q: "ボカロ|ボーカロイド|VOCALOID|初音ミク|重音テト|可不|歌ってみた"
+    q: "ボカロ|ボーカロイド|VOCALOID|初音ミク|重音テト|可不|オリジナル曲"
 
   - id: vtuber
     label: 音楽・MV
