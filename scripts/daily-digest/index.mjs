@@ -7,6 +7,7 @@
  *   pnpm digest select  [--date] (--draft [--reset] | --llm [--providers anthropic,openai] | --mock)
  *   pnpm digest render  [--date] [--force] [--final]
  *   pnpm digest publish [--date] [--skip-build] [--no-merge]
+ *   pnpm digest stats   [--date] [--days 30]
  *
  * 環境変数（.env から読む）: X_BEARER_TOKEN, YOUTUBE_API_KEY。select --llm を使うときは
  * ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY のいずれか。
@@ -19,6 +20,7 @@ import { publish } from "./commands/publish.mjs"
 import { render } from "./commands/render.mjs"
 import { review } from "./commands/review.mjs"
 import { select } from "./commands/select.mjs"
+import { stats } from "./commands/stats.mjs"
 import { loadContext } from "./lib/context.mjs"
 import { loadDotEnv } from "./lib/env.mjs"
 
@@ -29,7 +31,8 @@ const HELP = `使い方: pnpm digest <コマンド> [--date YYYY-MM-DD]
   curate    ルールを足す・消す（例: curate block author:#3 --reason 懸賞アカウント。prune で期限切れのルールを消す）
   select    候補一覧から selection.json の下書きを作る（--draft。あれば足りない候補を足す、--reset で作り直し）。--llm は API の LLM で選ぶ
   render    selection.json から記事を書き出す（既定はプレビュー用で警告を表示。--final で公開用）
-  publish   記事と curation.yaml をコミットし、PR を作って CI が通ったらマージする`
+  publish   記事と curation.yaml をコミットし、PR を作って CI が通ったらマージする
+  stats     直近の選定からジャンルごとの採用率を出し、ルールにしてよさそうなものを提案する（--days で日数）`
 
 const OPTIONS = {
   date: { type: "string" },
@@ -54,6 +57,8 @@ const OPTIONS = {
   // publish
   "skip-build": { type: "boolean", default: false },
   "no-merge": { type: "boolean", default: false },
+  // stats
+  days: { type: "string" },
   help: { type: "boolean", short: "h", default: false },
 }
 
@@ -80,6 +85,8 @@ async function main() {
       return render(ctx, { force: opts.force, final: opts.final })
     case "publish":
       return publish(ctx, { skipBuild: opts["skip-build"], noMerge: opts["no-merge"] })
+    case "stats":
+      return stats(ctx, { days: opts.days ? Number(opts.days) : undefined })
     default:
       throw new Error(`不明なコマンドです: ${command}\n\n${HELP}`)
   }
