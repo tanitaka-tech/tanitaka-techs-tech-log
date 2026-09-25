@@ -92,6 +92,18 @@ export function titleAllowed(v, genre, yc) {
   return !pattern || !new RegExp(pattern, "i").test(v.snippet?.title ?? "")
 }
 
+/**
+ * チャンネル名・概要欄が除外の正規表現（youtube.excludeChannel / excludeDescription。AI で作った曲のチャンネルなど）に
+ * 当たらないか。大文字小文字は区別する（「AI」が英単語の途中に当たらないように）
+ */
+export function channelAllowed(v, genre, yc) {
+  const channel = genre.excludeChannel ?? yc.excludeChannel
+  const description = genre.excludeDescription ?? yc.excludeDescription
+  if (channel && new RegExp(channel).test(v.snippet?.channelTitle ?? "")) return false
+  if (description && new RegExp(description).test(v.snippet?.description ?? "")) return false
+  return true
+}
+
 export function isEmbeddable(v) {
   return v.status?.embeddable && v.status?.privacyStatus === "public"
 }
@@ -169,6 +181,7 @@ export async function searchYoutubeGenre(genre, window, config, key, now = new D
     [
       ["埋め込み不可", isEmbeddable],
       ["除外するタイトル", (v) => titleAllowed(v, genre, yc)],
+      ["除外するチャンネル・概要欄", (v) => channelAllowed(v, genre, yc)],
       ["仮名なし", (v) => !requireKana || hasKana(v)],
       ["再生数不足", (v) => Number(v.statistics?.viewCount ?? 0) >= (genre.minViews ?? yc.minViews)],
     ],

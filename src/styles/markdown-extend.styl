@@ -336,6 +336,12 @@
         width: 100%
         visibility: hidden
         opacity: 0
+        // X の埋め込みの iframe は自分に visibility: visible を付けるので、見えていない項目でも
+        // マウスの操作（クリック・ホイール）を横取りする。表示中の項目以外は操作を受けないようにする
+        pointer-events: none
+
+        &.active
+          pointer-events: auto
 
         // 切り替えのアニメーション（Layout.astro）の間は、消えていく項目も見せておく
         &.active, &.leaving
@@ -625,46 +631,12 @@
     & + .digest-review-badge
       margin-left: 0.25rem
 
-  // 縦に長い項目は折りたたむ（Layout.astro の DIGEST_TALL_PX と同じ高さ）。下をぼかして「全体を見る」を出す
-  .digest-entry
-    position: relative
-
-    &.digest-tall
-      max-height: 640px
-      overflow: hidden
-
-      &::after
-        content: ""
-        position: absolute
-        left: 0
-        right: 0
-        bottom: 0
-        height: 6rem
-        background: linear-gradient(transparent, var(--btn-regular-bg))
-        pointer-events: none
-
-  .digest-unfold
-    position: absolute
-    bottom: 0.75rem
-    left: 50%
-    z-index: 1
-    padding: 0.4rem 1rem
-    border-radius: 999px
-    font-size: 0.85rem
-    font-weight: bold
-    color: var(--btn-content)
-    background: var(--card-bg)
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15)
-    transform: translateX(-50%)
-
-    .digest-entry[data-expanded="true"] > &
-      position: static
-      margin: 0.75rem auto 0
-      transform: none
-
-  .digest-entry[data-expanded="true"]
-    flex-direction: column
-    align-items: center
+  // 縦に長い項目は高さを抑えて、項目の中でスクロールさせる（Layout.astro の DIGEST_TALL_PX と同じ高さ）
+  .digest-entry.digest-tall
+    max-height: 640px
+    overflow-y: auto
+    overscroll-behavior: auto
+    scrollbar-width: thin
 
   // 閉じられないカテゴリ（音楽・MV）の見出しは押せる見た目にしない
   h2.digest-fixed

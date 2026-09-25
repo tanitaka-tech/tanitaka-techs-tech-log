@@ -71,6 +71,9 @@ youtube:
   maxDurationMinutes: 15 # これより長い動画（歌枠・雑談などの配信アーカイブ）を除く
   # 音楽・MV に載せないタイトル（アニメの PV・予告・CM など）。ジャンルごとに excludeTitle で上書きできる
   excludeTitle: "PV|Trailer|トレーラー|ティザー|予告|告知|CM|番宣|本編|切り抜き|生成してみた|AIカバー|AI歌唱|ランキング|TOP ?\\d+|ベスト\\d+|まとめ|メドレー|予想"
+  # AI で作った曲を載せないよう、チャンネル名・概要欄で除く（大文字小文字は区別する）
+  excludeChannel: "\\bAI\\b|ＡＩ|Suno|Udio|生成AI|AI(作曲|音楽|ソング|Music|Song|Studio)"
+  excludeDescription: "Suno|Udio|AIで作(曲|成|った)|AI作曲|AI生成|生成AIで|AIを使って作|AI ?Music|Made with AI"
   # 何時間前までに公開された動画を検索するか（音楽は24時間では再生数が集まらないので長めに）
   windowHours: 72
 
@@ -254,6 +257,8 @@ genres:
     pages: 2 # 1回の検索で読むページ数（1ページ50曲）
     maxTrackAgeDays: 7
     minLikes: 3
+    # AI で作った曲は載せない
+    exclude: "Suno|Udio|\\bAI\\b|ＡＩ|AI作曲|AI生成|生成AI|AIで作|#?ai ?music|#?aimusic"
 
   # ---- X API の代わり（2026-09-26〜）----
   # はてなブックマークの人気エントリー（カテゴリ別 RSS）。include に当たる記事をブックマーク数の伸び率で並べる。

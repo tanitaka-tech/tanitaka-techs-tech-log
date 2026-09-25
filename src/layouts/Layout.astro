@@ -700,7 +700,7 @@ function setupDigestHeading(
 
 let digestBodyCount = 0
 
-// 縦に長い項目は、この高さで折りたたむ（「全体を見る」で開く）。1件が長いとカルーセル全体が伸びるため
+// 縦に長い項目は、この高さまでにして中でスクロールさせる。1件が長いとカルーセル全体が伸びるため
 const DIGEST_TALL_PX = 640
 
 /** container の中で el が中央あたりに来るようにスクロールする */
@@ -725,24 +725,12 @@ function digestThumb(entry: HTMLElement) {
 	return thumb
 }
 
-/** 縦に長い項目を折りたたむ。開いた項目（data-expanded）はそのまま */
-function foldIfTall(entry: HTMLElement) {
-	if (entry.dataset.expanded === "true") return
-	const tall = entry.scrollHeight > DIGEST_TALL_PX + 40
-	entry.classList.toggle("digest-tall", tall)
-	let button = entry.querySelector<HTMLButtonElement>(":scope > .digest-unfold")
-	if (!tall || button) return
-	button = document.createElement("button")
-	button.type = "button"
-	button.className = "digest-unfold"
-	button.textContent = "全体を見る ▼"
-	button.addEventListener("click", () => {
-		const open = entry.dataset.expanded !== "true"
-		entry.dataset.expanded = String(open)
-		entry.classList.toggle("digest-tall", !open)
-		button.textContent = open ? "折りたたむ ▲" : "全体を見る ▼"
-	})
-	entry.append(button)
+/**
+ * 縦に長い項目は高さを DIGEST_TALL_PX までにして、項目の中でスクロールさせる（折りたたむより操作が少ない）。
+ * 長くない項目には付けない（はみ出しを隠すと、埋め込みの影などが切れるため）
+ */
+function limitIfTall(entry: HTMLElement) {
+	entry.classList.toggle("digest-tall", entry.scrollHeight > DIGEST_TALL_PX + 40)
 }
 
 const isMediaEntry = (entry: HTMLElement) => entry.matches(".digest-entry-youtube, .digest-entry-soundcloud")
@@ -784,7 +772,7 @@ const digestLists = new WeakMap<HTMLElement, DigestList>()
 /**
  * デイリーダイジェストの項目一覧。左に選択中の項目、右に目次を表示する。
  * - 項目は1件だけ表示し、切り替えは前の項目が縮んで消え、次の項目が少し行き過ぎてから収まるアニメーションにする。
- *   高さは一番高い項目に揃える。縦に長い項目は DIGEST_TALL_PX で折りたたむ
+ *   高さは一番高い項目に揃える。縦に長い項目は DIGEST_TALL_PX までにして、項目の中でスクロールさせる
  * - 目次は左側と同じ高さにし、長いときは目次の中でスクロールする。クリック・ホバー・上下キーで選ぶ
  *   （ホバーで選んだときは目次をスクロールしない）
  * - スマホでは目次を長押しすると「なぞるモード」になり、指の下の項目に切り替えていく
@@ -826,7 +814,7 @@ function setupDigestLists() {
 		if (entries.length < 2) {
 			content.append(panel)
 			if (hasMedia) content.append(createVolumeControl())
-			for (const entry of entries) foldIfTall(entry)
+			for (const entry of entries) limitIfTall(entry)
 			continue
 		}
 
@@ -1049,9 +1037,10 @@ function setupDigestLists() {
 		toc.addEventListener("touchend", endScrub)
 		toc.addEventListener("touchcancel", endScrub)
 
-		// 項目の高さを一番高い項目に揃える（埋め込みの読み込みで高さが変わるたびに更新）。縦に長い項目は折りたたむ
+		// 項目の高さを一番高い項目に揃える（埋め込みの読み込みで高さが変わるたびに更新）。
+		// 縦に長い項目は高さを抑えて中でスクロールさせる
 		const resize = () => {
-			for (const entry of entries) foldIfTall(entry)
+			for (const entry of entries) limitIfTall(entry)
 			const height = Math.max(...entries.map((entry) => entry.offsetHeight))
 			wrap.style.setProperty("--digest-height", `${height}px`)
 		}
