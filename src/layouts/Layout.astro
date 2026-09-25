@@ -634,40 +634,9 @@ document.addEventListener(
 	{ passive: true, capture: true },
 )
 
-const DIGEST_ICONS: Record<string, string> = {
-	views: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>',
-	likes:
-		'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>',
-	reposts:
-		'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>',
-	chevron:
-		'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>',
-}
-const digestNumber = new Intl.NumberFormat("ja-JP", { notation: "compact", maximumFractionDigits: 1 })
-
-/** 目次に出す数値（収集時点）。YouTube は再生数、X はいいね数とリポスト数 */
-function digestStats(entry: HTMLElement) {
-	const kinds = (
-		[
-			["views", "再生"],
-			["likes", "いいね"],
-			["reposts", "リポスト"],
-		] as const
-	).filter(([key]) => entry.dataset[key] != null)
-	if (kinds.length === 0) return null
-	const row = document.createElement("span")
-	row.className = "digest-toc-stats"
-	row.title = "収集時点の数値"
-	for (const [key, label] of kinds) {
-		const value = Number(entry.dataset[key])
-		const stat = document.createElement("span")
-		stat.className = `digest-toc-stat ${key}`
-		stat.setAttribute("aria-label", `${label} ${value.toLocaleString("ja-JP")}`)
-		stat.innerHTML = `${DIGEST_ICONS[key]}<span>${digestNumber.format(value)}</span>`
-		row.append(stat)
-	}
-	return row
-}
+// カテゴリの見出しの開閉ボタンのアイコン
+const DIGEST_CHEVRON =
+	'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>'
 
 /** カテゴリの見出しに件数と開閉ボタンを付ける。見出しのどこを押しても開閉できる（# のリンクは除く） */
 function setupDigestHeading(heading: HTMLElement, body: HTMLElement, count: number) {
@@ -681,7 +650,7 @@ function setupDigestHeading(heading: HTMLElement, body: HTMLElement, count: numb
 	toggle.type = "button"
 	toggle.className = "digest-toggle"
 	toggle.setAttribute("aria-controls", body.id)
-	toggle.innerHTML = DIGEST_ICONS.chevron
+	toggle.innerHTML = DIGEST_CHEVRON
 	heading.append(toggle)
 	const setOpen = (open: boolean) => {
 		toggle.setAttribute("aria-expanded", String(open))
@@ -764,15 +733,27 @@ function setupDigestLists() {
 			const tab = document.createElement("button")
 			tab.type = "button"
 			tab.setAttribute("role", "tab")
+			// 小さなサムネイル。画像がない項目（投稿者のアイコンが取れていない X の投稿など）は種類の頭文字で埋める
+			const thumb = document.createElement("span")
+			thumb.className = `digest-toc-thumb ${entry.className.match(/digest-entry-(\w+)/)?.[1] ?? ""}`
+			if (entry.dataset.thumb) {
+				const img = document.createElement("img")
+				img.src = entry.dataset.thumb
+				img.alt = ""
+				img.loading = "lazy"
+				img.className = "no-lightbox"
+				thumb.append(img)
+			}
+			const text = document.createElement("span")
+			text.className = "digest-toc-text"
 			const label = document.createElement("span")
 			label.className = "digest-toc-label"
 			label.textContent = entry.dataset.label || `${i + 1}件目`
 			const meta = document.createElement("span")
 			meta.className = "digest-toc-meta"
 			meta.textContent = entry.dataset.meta ?? ""
-			tab.append(label, meta)
-			const stats = digestStats(entry)
-			if (stats) tab.append(stats)
+			text.append(label, meta)
+			tab.append(thumb, text)
 			tab.addEventListener("click", () => select(i, true))
 			entry.setAttribute("role", "tabpanel")
 			toc.append(tab)

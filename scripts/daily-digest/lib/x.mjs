@@ -38,7 +38,7 @@ export async function searchXGenre(genre, window, config, token, budget, now = n
       sort_order: "relevancy",
       "tweet.fields": "created_at,public_metrics,lang,possibly_sensitive,author_id",
       expansions: "author_id",
-      "user.fields": "username,name,protected",
+      "user.fields": "username,name,protected,profile_image_url",
     },
     token,
   )
@@ -71,7 +71,7 @@ export async function searchXGenre(genre, window, config, token, budget, now = n
       title: "",
       text: t.text,
       // handle は変更できるので、ルール（curation.yaml）には変わらない id を使う
-      author: { id: user.id, name: user.name, handle: user.username },
+      author: { id: user.id, name: user.name, handle: user.username, avatar: user.profile_image_url },
       publishedAt: publishedAt.toISOString(),
       metrics: t.public_metrics,
       score: velocity(xEngagement(t.public_metrics), publishedAt, now),
