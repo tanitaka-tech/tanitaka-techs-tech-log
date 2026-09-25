@@ -623,267 +623,148 @@ function renderTweets() {
 
 // デイリーダイジェストのカルーセル。項目数ぶんのドットと前後ボタンを付け、
 // 表示中の項目に合わせて高さを変える（縦に長い埋め込みがあっても他の項目の下が空かないように）
-const MAX_VISIBLE_DOTS = 9
-// 1ページに縦に積む項目どうしの間隔（px）
-const STACK_GAP = 16
-// ページ送りのアニメーション時間（ms）。ブラウザ標準の smooth は遅いので自前で動かす
-const PAGE_ANIMATION_MS = 260
-
 /**
- * ホイール・トラックパッドの入力が「新しい操作の始まり」かどうかを判定する。
- * トラックパッドは指を離したあとも、だんだん小さくなる慣性の入力が届き続ける。
- * そのため「入力の間が空いた」か「弱まっていた入力がまた強くなった（慣性中に次の操作をした）」ときだけ
- * 新しい操作とみなし、慣性だけでは何件も進まないようにする
+ * デイリーダイジェストの項目一覧。左に目次、右に選択中の項目を1件だけ表示する。
+ * - 目次は右側と同じ高さにし、長いときは目次の中でスクロールする
+ * - 目次のスクロール位置に応じて表示する項目が変わる（一番上で最初の項目、一番下で最後の項目）。
+ *   クリック・上下キーでも選べる
+ * - 右側の高さは一番高い項目に固定し、切り替えで高さが変わらないようにする
+ * - 項目に data-step があれば、目次に区切りの小見出しを入れる
  */
-function createWheelGestureDetector() {
-	let lastTime = 0
-	let peak = 0
-	let trough = Number.POSITIVE_INFINITY
-	let decaying = false
-	return (delta: number): boolean => {
-		const magnitude = Math.abs(delta)
-		const now = performance.now()
-		const gap = now - lastTime
-		lastTime = now
-		// トラックパッドの入力は毎フレーム届くので、60ms 空けば新しい操作（マウスホイールの1ノッチも含む）
-		const fresh = magnitude >= 1 && (gap > 60 || (decaying && magnitude > Math.max(trough * 2, 6)))
-		if (fresh) {
-			peak = magnitude
-			trough = Number.POSITIVE_INFINITY
-			decaying = false
-		} else if (decaying) {
-			trough = Math.min(trough, magnitude)
-		} else if (magnitude >= peak) {
-			peak = magnitude
-		} else if (magnitude < peak * 0.6) {
-			decaying = true
-			trough = magnitude
-		}
-		return fresh
-	}
-}
-
-/**
- * デイリーダイジェストのカルーセル。
- * 高さは中の一番高い項目に固定し、低い項目は1ページに縦に積めるだけ積む（X の投稿は高さの差が大きいため）。
- * ページ数ぶんのドットと前後ボタンを付け、ホイール・トラックパッドでは1ページずつ送る。
- * 項目に data-step があれば、上部に区切り（「Xで話題」「アニソン」など）の切り替えを付ける。
- * 区切りの違う項目は同じページに積まない
- */
-function setupCarousels() {
-	for (const track of document.querySelectorAll<HTMLElement>(".digest-carousel")) {
-		if (track.dataset.ready) continue
-		track.dataset.ready = "true"
-		const slides = [...track.children] as HTMLElement[]
-		if (slides.length < 2) continue
+function setupDigestLists() {
+	for (const panel of document.querySelectorAll<HTMLElement>(".digest-items")) {
+		if (panel.dataset.ready) continue
+		panel.dataset.ready = "true"
+		const entries = [...panel.children] as HTMLElement[]
+		if (entries.length < 2) continue
 
 		const wrap = document.createElement("div")
-		wrap.className = "digest-carousel-wrap"
-		track.before(wrap)
-		const nav = document.createElement("div")
-		nav.className = "digest-carousel-nav"
-		const stepBar = document.createElement("div")
-		stepBar.className = "digest-carousel-steps"
-		wrap.append(stepBar, track, nav)
-		track.classList.add("stacked")
-		const stepOf = (i: number) => slides[i].dataset.step ?? ""
-		const steps = [...new Set(slides.map((_, i) => stepOf(i)).filter(Boolean))]
-		if (steps.length === 0) stepBar.remove()
+		wrap.className = "digest-browser"
+		panel.before(wrap)
+		const toc = document.createElement("div")
+		toc.className = "digest-toc"
+		toc.setAttribute("role", "tablist")
+		toc.setAttribute("aria-orientation", "vertical")
+		wrap.append(toc, panel)
+		panel.classList.add("switching")
 
-		// pages[i] = i ページ目に置いた項目の番号
-		let pages: number[][] = [[0]]
-		const lastPage = () => pages.length - 1
-		const clamp = (i: number) => Math.max(0, Math.min(lastPage(), i))
-		let current = 0
-		// 送り先。アニメーション中に続けて送られても積み上げられるよう、表示中のページとは別に持つ
-		let target = 0
-
-		let animation = 0
-		const go = (i: number, instant = false) => {
-			target = clamp(i)
-			const to = target * track.clientWidth
-			cancelAnimationFrame(animation)
-			animation = 0
-			if (instant) {
-				track.style.scrollSnapType = ""
-				track.scrollLeft = to
-				return
+		let active = -1
+		let lastStep = ""
+		const tabs = entries.map((entry, i) => {
+			const step = entry.dataset.step ?? ""
+			if (step && step !== lastStep) {
+				const heading = document.createElement("div")
+				heading.className = "digest-toc-step"
+				heading.textContent = step
+				toc.append(heading)
 			}
-			const from = track.scrollLeft
-			const start = performance.now()
-			// アニメーション中はスナップが途中の位置を引き戻さないよう止める
-			track.style.scrollSnapType = "none"
-			const tick = (now: number) => {
-				const t = Math.min(1, (now - start) / PAGE_ANIMATION_MS)
-				track.scrollLeft = from + (to - from) * (1 - (1 - t) ** 3)
-				if (t < 1) {
-					animation = requestAnimationFrame(tick)
-				} else {
-					animation = 0
-					track.style.scrollSnapType = ""
-				}
-			}
-			animation = requestAnimationFrame(tick)
-		}
-		const step = (dir: number) => go(target + dir)
-
-		const button = (className: string, label: string, text: string, onClick: () => void) => {
-			const btn = document.createElement("button")
-			btn.type = "button"
-			btn.className = className
-			btn.setAttribute("aria-label", label)
-			btn.textContent = text
-			btn.addEventListener("click", onClick)
-			return btn
-		}
-		const prev = button("digest-carousel-arrow", "前へ", "‹", () => step(-1))
-		const next = button("digest-carousel-arrow", "次へ", "›", () => step(1))
-		// ドットが多いときは表示中のページを中心に一部だけ見せ、何ページ目かを数字でも出す
-		const dotList = document.createElement("div")
-		dotList.className = "digest-carousel-dots"
-		const count = document.createElement("span")
-		count.className = "digest-carousel-count"
-		nav.append(prev, dotList, next, count)
-		let dots: HTMLButtonElement[] = []
-		const stepButtons = steps.map((name) => {
-			const items = slides.flatMap((_, i) => (stepOf(i) === name ? [i] : []))
-			const btn = button("digest-carousel-step", `${name}（${items.length}件）`, name, () =>
-				go(pages.findIndex((page) => page.includes(items[0]))),
-			)
-			const badge = document.createElement("span")
-			badge.textContent = String(items.length)
-			btn.append(badge)
-			return btn
+			lastStep = step
+			const tab = document.createElement("button")
+			tab.type = "button"
+			tab.setAttribute("role", "tab")
+			const label = document.createElement("span")
+			label.className = "digest-toc-label"
+			label.textContent = entry.dataset.label || `${i + 1}件目`
+			const meta = document.createElement("span")
+			meta.className = "digest-toc-meta"
+			meta.textContent = entry.dataset.meta ?? ""
+			tab.append(label, meta)
+			tab.addEventListener("click", () => select(i, true))
+			entry.setAttribute("role", "tabpanel")
+			toc.append(tab)
+			return tab
 		})
-		stepBar.append(...stepButtons)
 
-		let shown = -1
-		const update = () => {
-			current = clamp(Math.round(track.scrollLeft / track.clientWidth))
-			if (current === shown) return
-			shown = current
-			dots.forEach((dot, i) => {
-				dot.setAttribute("aria-current", String(i === current))
-				// 中心から離れたドットほど小さくする（CSS で参照）
-				dot.dataset.distance = String(Math.min(Math.abs(i - current), 4))
+		// 目次のスクロール位置 → 注目位置。上端から下端へ、スクロール量に比例して動かす。
+		// こうすると一番上で最初の項目、一番下で最後の項目になり、選ばれる項目は常に目次の見える範囲に入る
+		const maxScroll = () => toc.scrollHeight - toc.clientHeight
+		const focusY = () => {
+			const max = maxScroll()
+			return toc.scrollTop + (max > 0 ? toc.scrollTop / max : 0) * toc.clientHeight
+		}
+		const tabAt = (y: number) => {
+			let best = 0
+			let bestDistance = Number.POSITIVE_INFINITY
+			tabs.forEach((tab, i) => {
+				const top = tab.offsetTop
+				const distance = y < top ? top - y : Math.max(0, y - (top + tab.offsetHeight))
+				if (distance < bestDistance) {
+					best = i
+					bestDistance = distance
+				}
 			})
-			const dot = dots[current]
-			if (dot) {
-				dotList.scrollTo({ left: dot.offsetLeft + dot.offsetWidth / 2 - dotList.clientWidth / 2, behavior: "smooth" })
-			}
-			const currentStep = stepOf(pages[current]?.[0] ?? 0)
-			stepButtons.forEach((btn, i) => btn.setAttribute("aria-current", String(steps[i] === currentStep)))
-			count.textContent = `${current + 1} / ${pages.length}`
-			prev.disabled = current === 0
-			next.disabled = current === lastPage()
+			return best
 		}
 
-		// 項目の高さから、ページへの割り当てと位置を決める。埋め込みの読み込みで高さが変わるたびにやり直す
-		const layout = () => {
-			const anchor = pages[current]?.[0] ?? 0
-			const heights = slides.map((slide) => slide.offsetHeight)
-			const maxHeight = Math.max(...heights)
-			const used: number[] = []
-			pages = []
-			slides.forEach((slide, i) => {
-				// 前のページから順に、同じ区切りで収まる最初のページに入れる
-				let page = used.findIndex(
-					(h, p) => h + STACK_GAP + heights[i] <= maxHeight && stepOf(pages[p][0]) === stepOf(i),
-				)
-				if (page === -1) {
-					page = pages.length
-					pages.push([])
-					used.push(-STACK_GAP)
-				}
-				slide.dataset.top = String(used[page] + STACK_GAP)
-				slide.style.left = `${page * 100}%`
-				used[page] += STACK_GAP + heights[i]
-				pages[page].push(i)
-			})
-			// 積んだ項目がページより低いときは上下中央に寄せる
-			pages.forEach((items, page) => {
-				const offset = (maxHeight - used[page]) / 2
-				for (const i of items) slides[i].style.top = `${Number(slides[i].dataset.top) + offset}px`
-			})
-			track.style.height = `${maxHeight}px`
-
-			if (dots.length !== pages.length) {
-				dots = pages.map((_, i) => button("digest-carousel-dot", `${i + 1}ページ目`, "", () => go(i)))
-				dotList.replaceChildren(...dots)
-			}
-			// 区切りの境目のドットに間隔を空ける
-			dots.forEach((dot, i) => {
-				dot.classList.toggle("step-start", i > 0 && stepOf(pages[i][0]) !== stepOf(pages[i - 1][0]))
-			})
-			nav.hidden = pages.length < 2
-			nav.classList.toggle("many", pages.length > MAX_VISIBLE_DOTS)
-			// 並びが変わっても、見ていた項目のページに留まる
-			shown = -1
-			go(pages.findIndex((items) => items.includes(anchor)), true)
-			update()
-		}
-
-		const isFresh = createWheelGestureDetector()
-		// ドット付近では縦・横どちらの操作でも送る
-		nav.addEventListener(
-			"wheel",
-			(e) => {
-				const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY
-				e.preventDefault()
-				if (isFresh(delta)) step(Math.sign(delta))
-			},
-			{ passive: false },
-		)
-		// 項目の上でも縦・横どちらの操作でも送る。ただし最初・最後のページでそれ以上進めない向きの操作は
-		// ページのスクロールに譲り、カルーセルから抜け出せるようにする（その操作の慣性も含めて譲る）
-		let passing = false
-		track.addEventListener(
-			"wheel",
-			(e) => {
-				const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY
-				if (isFresh(delta)) {
-					const dir = Math.sign(delta)
-					passing = (dir < 0 && target <= 0) || (dir > 0 && target >= lastPage())
-					if (!passing) step(dir)
-				}
-				if (!passing) e.preventDefault()
-			},
-			{ passive: false },
-		)
-
-		let frame = 0
+		// クリック・キー操作で選んだときは、その項目が注目位置に来るよう目次をスクロールする。
+		// スクロールが止まるまでは、スクロール位置からの選択を止める
+		let syncing = false
 		let settleTimer: ReturnType<typeof setTimeout> | undefined
-		track.addEventListener(
+		const settle = () => {
+			clearTimeout(settleTimer)
+			settleTimer = setTimeout(() => {
+				syncing = false
+			}, 150)
+		}
+		const scrollTocTo = (i: number) => {
+			const max = maxScroll()
+			if (max <= 0) return
+			const center = tabs[i].offsetTop + tabs[i].offsetHeight / 2
+			// focusY(s) = s + (s / max) * clientHeight = center を解く
+			const top = Math.max(0, Math.min(max, (center * max) / (max + toc.clientHeight)))
+			syncing = true
+			settle()
+			toc.scrollTo({ top, behavior: "smooth" })
+		}
+
+		const select = (index: number, syncScroll = false) => {
+			const i = Math.max(0, Math.min(entries.length - 1, index))
+			if (syncScroll) scrollTocTo(i)
+			if (i === active) return
+			// 見えなくなる項目の動画は止める
+			const leaving = entries[active]
+			if (leaving) {
+				for (const { frame, player } of youtubePlayers) if (leaving.contains(frame)) player.pauseVideo?.()
+			}
+			active = i
+			entries.forEach((entry, j) => entry.classList.toggle("active", j === i))
+			tabs.forEach((tab, j) => {
+				tab.setAttribute("aria-selected", String(j === i))
+				tab.tabIndex = j === i ? 0 : -1
+			})
+		}
+
+		toc.addEventListener(
 			"scroll",
 			() => {
-				if (!frame) {
-					frame = requestAnimationFrame(() => {
-						frame = 0
-						update()
-					})
-				}
-				// スワイプなどで止まった位置を次の送りの起点にする
-				clearTimeout(settleTimer)
-				settleTimer = setTimeout(() => {
-					if (!animation) target = current
-				}, 150)
+				if (syncing) return settle()
+				select(tabAt(focusY()))
 			},
 			{ passive: true },
 		)
-
-		let layoutFrame = 0
-		const observer = new ResizeObserver(() => {
-			cancelAnimationFrame(layoutFrame)
-			layoutFrame = requestAnimationFrame(layout)
+		toc.addEventListener("keydown", (e) => {
+			const next = { ArrowDown: active + 1, ArrowUp: active - 1, Home: 0, End: entries.length - 1 }[e.key]
+			if (next === undefined) return
+			e.preventDefault()
+			select(next, true)
+			tabs[active].focus({ preventScroll: true })
 		})
-		for (const slide of slides) observer.observe(slide)
-		layout()
+
+		// 右側の高さを一番高い項目に揃え、目次も同じ高さにする（埋め込みの読み込みで高さが変わるたびに更新）
+		const resize = () => {
+			const height = Math.max(...entries.map((entry) => entry.offsetHeight))
+			wrap.style.setProperty("--digest-height", `${height}px`)
+		}
+		const observer = new ResizeObserver(resize)
+		for (const entry of entries) observer.observe(entry)
+		resize()
+		select(0)
 	}
 }
 
 // YouTube は最初サムネイルだけを表示し、クリックでプレーヤーに差し替える。
 // 1本再生したら他を一時停止する
-let youtubePlayers: { pauseVideo?: () => void }[] = []
+let youtubePlayers: { frame: HTMLIFrameElement; player: { pauseVideo?: () => void } }[] = []
 const youtubeApiCallbacks: (() => void)[] = []
 
 function withYouTubeApi(callback: () => void) {
@@ -917,7 +798,7 @@ function setupYoutube() {
 			iframe.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
 			iframe.allowFullscreen = true
 			facade.replaceWith(iframe)
-			for (const other of youtubePlayers) other.pauseVideo?.()
+			for (const other of youtubePlayers) other.player.pauseVideo?.()
 			withYouTubeApi(() => {
 				const YT = window.YT
 				if (!YT) return
@@ -925,11 +806,11 @@ function setupYoutube() {
 					events: {
 						onStateChange: (event) => {
 							if (event.data !== YT.PlayerState.PLAYING) return
-							for (const other of youtubePlayers) if (other !== player) other.pauseVideo?.()
+							for (const other of youtubePlayers) if (other.player !== player) other.player.pauseVideo?.()
 						},
 					},
 				})
-				youtubePlayers.push(player)
+				youtubePlayers.push({ frame: iframe, player })
 			})
 		})
 	}
@@ -939,7 +820,7 @@ function renderDigest() {
 	// ページ遷移で前のページの動画は消えている
 	youtubePlayers = []
 	renderTweets()
-	setupCarousels()
+	setupDigestLists()
 	setupYoutube()
 }
 

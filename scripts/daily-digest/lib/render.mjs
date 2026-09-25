@@ -76,9 +76,23 @@ function thumbnail(c) {
   return undefined
 }
 
+/** 目次に出す項目名と補足。X の投稿は本文を保存しない方針なので投稿者で示す */
+function tocLabel(c) {
+  switch (c.source) {
+    case "youtube":
+      return { label: c.title, meta: c.author.name }
+    case "steam": {
+      const sale = steamSale(c)
+      return { label: c.title, meta: sale ? `-${sale.discountPercent}% ${yen(sale.finalPrice)}` : "Steam" }
+    }
+    default:
+      return { label: c.author.name, meta: `@${c.author.handle}` }
+  }
+}
+
 /**
  * 記事を組み立てる。項目はカテゴリ（ジャンルのラベル）ごとにまとめ、categoryOrder の順に
- * 「固定の見出し + 埋め込みのカルーセル」として並べる。
+ * 「固定の見出し + 目次付きの項目一覧」として並べる（目次と切り替えは Layout.astro が付ける）。
  */
 export function renderArticle({ date, selection, candidatesByKey, category, fixedTags, categoryOrder, stepOrder = [] }) {
   const items = selection.items.map((i) => ({ ...i, c: candidatesByKey.get(i.key) }))
@@ -112,17 +126,17 @@ export function renderArticle({ date, selection, candidatesByKey, category, fixe
     "---",
   ].join("\n")
 
-  // カルーセルの中に空行を入れると Markdown として解釈されてしまうので、1つの HTML ブロックにする
+  // 一覧の中に空行を入れると Markdown として解釈されてしまうので、1つの HTML ブロックにする
   const body = sections
     .map(
       ([label, list]) => `<!-- digest-section -->
 ## ${escapeText(label)}
 
-<div class="digest-carousel">
+<div class="digest-items">
 ${list
   .map(
     ({ c }) => `<!-- digest-item ${c.source}:${c.id} -->
-<div class="digest-slide digest-slide-${c.source}"${c.step ? ` data-step="${escapeAttr(c.step)}"` : ""}>
+<div class="digest-entry digest-entry-${c.source}" data-label="${escapeAttr(tocLabel(c).label)}" data-meta="${escapeAttr(tocLabel(c).meta)}"${c.step ? ` data-step="${escapeAttr(c.step)}"` : ""}>
 ${embed(c)}
 </div>
 <!-- /digest-item -->
