@@ -5,7 +5,7 @@ import { resolveTargetDate } from "./date.mjs"
 
 export const CONFIG_PATH = "scripts/daily-digest/config.yaml"
 
-/** 各サブコマンドで共通に使う設定・対象日・キャッシュのパス */
+/** 各サブコマンドで共通に使う設定・記事の日付・キャッシュのパス */
 export function loadContext({ date: input, xLimit } = {}) {
   const config = YAML.parse(fs.readFileSync(CONFIG_PATH, "utf8"))
   for (const g of config.genres) {

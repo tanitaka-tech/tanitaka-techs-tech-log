@@ -36,7 +36,7 @@ draft: false
 
 ## デイリーダイジェスト（自動生成記事）
 
-X・YouTube・Steam からその日（JST）に伸びた投稿を集め、カテゴリごとに埋め込みをカルーセルで並べた記事を作ります。候補の確認・ブロック・重みづけ・添削は手元で Claude Code と会話しながら行い、確認が済んだものだけを PR 経由で公開します。
+X・YouTube・Steam から直近24時間に伸びた投稿を集め、カテゴリごとに埋め込みをカルーセルで並べた記事を作ります。候補の確認・ブロック・重みづけ・添削は手元で Claude Code と会話しながら行い、確認が済んだものだけを PR 経由で公開します。
 
 - 出力先: `src/content/posts/daily-digest/YYYY-MM-DD.md`
 - 生成記事には `自動生成` タグが付きます（手書きの記事と区別するため）
@@ -51,9 +51,9 @@ X・YouTube・Steam からその日（JST）に伸びた投稿を集め、カテ
 cp .env.example .env   # X_BEARER_TOKEN / YOUTUBE_API_KEY を記入
 ```
 
-Claude Code で `/digest`（日付を指定するなら `/digest 2026-09-25`）を実行すると、次の順に進みます。
+Claude Code で `/digest` を実行すると、次の順に進みます。
 
-1. **収集**: 候補を集めて `.digest-cache/<date>/` に保存する。X は従量課金なので、保存済みなら取り直さない
+1. **収集**: 実行時点から24時間以内の投稿・動画（`config.yaml` の `collect.windowHours`）を集めて `.digest-cache/<date>/` に保存する。`<date>` は記事の日付（実行日）。X は従量課金なので、保存済みなら取り直さない。前の記事に載せたものは自動で候補から外れる
 2. **確認**: `curation.yaml` を適用した候補を番号付きで見せる。Claude がおすすめ（✅）と気になる点（⚠️）を付けるが、除外はしない
 3. **重みづけ**: 「#3 の人ブロック」「VTuber 少し強めに」「#9 は推し」などと指示すると、`curation.yaml` にルールが追加される。「今回だけ外して」は選定だけを直す
 4. **選定・添削**: 選んだ項目とタイトル・説明を `selection.json` に書いて記事を生成し、`pnpm dev` でプレビューする。タイトルや項目の直しも会話で指示する
@@ -72,10 +72,10 @@ Claude Code で `/digest`（日付を指定するなら `/digest 2026-09-25`）�
 
 ### コマンド
 
-`/digest` スキルは次のコマンドを順に呼んでいます。手で実行することもできます（`--date` を省くと今日）。
+`/digest` スキルは次のコマンドを順に呼んでいます。手で実行することもできます。`--date` は記事の日付で、省くと今日です（collect は今日しか指定できません。review 以降は過去の日付の作りかけの記事にも使えます）。
 
 ```sh
-pnpm digest collect --date 2026-09-25         # 候補を集める（--force で取り直し、--x-limit 100 で X の読み取りを抑える）
+pnpm digest collect                           # 直近24時間の候補を集める（--force で取り直し、--x-limit 100 で X の読み取りを抑える）
 pnpm digest review --date 2026-09-25          # 候補一覧（--all で除外・圏外も表示）
 pnpm digest curate block author:#3 --reason 懸賞アカウント
 pnpm digest curate weight genre:vtuber 1.5 --reason 好み --until 2026-10-31

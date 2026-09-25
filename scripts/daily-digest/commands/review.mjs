@@ -16,7 +16,10 @@ export function review(ctx, { all = false } = {}) {
   )
 
   const collected = readJson(ctx.paths.collect, {})
-  console.log(`# ${ctx.date} の候補（✅ 選択中 / 📌 pin / スコアは curation.yaml の重み適用後）`)
+  const span = collected.window
+    ? `、${new Date(collected.window.start).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })} 〜 ${new Date(collected.window.end).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })} の投稿`
+    : ""
+  console.log(`# ${ctx.date} の候補${span}（✅ 選択中 / 📌 pin / スコアは curation.yaml の重み適用後）`)
   if (collected.errors?.length) {
     console.log(`⚠️ 収集エラー: ${collected.errors.map((e) => `${e.genre}（${e.message.slice(0, 80)}）`).join(", ")}`)
   }

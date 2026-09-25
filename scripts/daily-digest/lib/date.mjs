@@ -14,16 +14,12 @@ export function resolveTargetDate(input, now = new Date()) {
 }
 
 /**
- * 指定日（JST）の 00:00 から、その日の終わりか現在時刻の早い方までの範囲。
+ * 実行時点から hours 時間さかのぼった範囲。
  * X の recent search は end_time が現在より10秒以上前である必要があるので余裕を持たせる。
  */
-export function dayWindowJst(date, now = new Date()) {
-  const start = new Date(`${date}T00:00:00+09:00`)
-  const dayEnd = new Date(start.getTime() + 24 * 60 * 60 * 1000)
-  const end = new Date(Math.min(dayEnd.getTime(), now.getTime() - 60 * 1000))
-  if (end <= start) {
-    throw new Error(`${date} はまだ始まっていません`)
-  }
+export function recentWindow(now = new Date(), hours = 24) {
+  const end = new Date(now.getTime() - 60 * 1000)
+  const start = new Date(now.getTime() - hours * 60 * 60 * 1000)
   return { start, end }
 }
 
