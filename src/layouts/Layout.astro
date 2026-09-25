@@ -623,6 +623,83 @@ function renderTweets() {
 
 // デイリーダイジェストのカルーセル。項目数ぶんのドットと前後ボタンを付け、
 // 表示中の項目に合わせて高さを変える（縦に長い埋め込みがあっても他の項目の下が空かないように）
+// ページのスクロール中にカーソルが目次に乗っても、この時間（ms）以内に続く操作はページのスクロールとして扱う
+const PAGE_WHEEL_CONTINUE_MS = 200
+let lastPageWheel = 0
+document.addEventListener(
+	"wheel",
+	(e) => {
+		if (!(e.target instanceof Element && e.target.closest(".digest-toc"))) lastPageWheel = performance.now()
+	},
+	{ passive: true, capture: true },
+)
+
+const DIGEST_ICONS: Record<string, string> = {
+	views: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>',
+	likes:
+		'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>',
+	reposts:
+		'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>',
+	chevron:
+		'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>',
+}
+const digestNumber = new Intl.NumberFormat("ja-JP", { notation: "compact", maximumFractionDigits: 1 })
+
+/** 目次に出す数値（収集時点）。YouTube は再生数、X はいいね数とリポスト数 */
+function digestStats(entry: HTMLElement) {
+	const kinds = (
+		[
+			["views", "再生"],
+			["likes", "いいね"],
+			["reposts", "リポスト"],
+		] as const
+	).filter(([key]) => entry.dataset[key] != null)
+	if (kinds.length === 0) return null
+	const row = document.createElement("span")
+	row.className = "digest-toc-stats"
+	row.title = "収集時点の数値"
+	for (const [key, label] of kinds) {
+		const value = Number(entry.dataset[key])
+		const stat = document.createElement("span")
+		stat.className = `digest-toc-stat ${key}`
+		stat.setAttribute("aria-label", `${label} ${value.toLocaleString("ja-JP")}`)
+		stat.innerHTML = `${DIGEST_ICONS[key]}<span>${digestNumber.format(value)}</span>`
+		row.append(stat)
+	}
+	return row
+}
+
+/** カテゴリの見出しに件数と開閉ボタンを付ける。見出しのどこを押しても開閉できる（# のリンクは除く） */
+function setupDigestHeading(heading: HTMLElement, body: HTMLElement, count: number) {
+	const section = heading.parentElement
+	const title = heading.firstChild?.textContent?.trim() ?? ""
+	const countLabel = document.createElement("span")
+	countLabel.className = "digest-count"
+	countLabel.textContent = `${count}件`
+	heading.insertBefore(countLabel, heading.querySelector("a.anchor"))
+	const toggle = document.createElement("button")
+	toggle.type = "button"
+	toggle.className = "digest-toggle"
+	toggle.setAttribute("aria-controls", body.id)
+	toggle.innerHTML = DIGEST_ICONS.chevron
+	heading.append(toggle)
+	const setOpen = (open: boolean) => {
+		toggle.setAttribute("aria-expanded", String(open))
+		toggle.setAttribute("aria-label", `${title}を${open ? "閉じる" : "開く"}`)
+		section?.classList.toggle("digest-collapsed", !open)
+		// 閉じている間は中の要素にフォーカスが移らないようにし、再生中の動画も止める
+		body.inert = !open
+		if (!open) for (const { frame, player } of youtubePlayers) if (body.contains(frame)) player.pauseVideo?.()
+	}
+	setOpen(true)
+	heading.addEventListener("click", (e) => {
+		if (e.target instanceof Element && e.target.closest("a")) return
+		setOpen(toggle.getAttribute("aria-expanded") !== "true")
+	})
+}
+
+let digestBodyCount = 0
+
 /**
  * デイリーダイジェストの項目一覧。左に目次、右に選択中の項目を1件だけ表示する。
  * - 目次は右側と同じ高さにし、長いときは目次の中でスクロールする
@@ -630,17 +707,41 @@ function renderTweets() {
  *   クリック・上下キーでも選べる
  * - 右側の高さは一番高い項目に固定し、切り替えで高さが変わらないようにする
  * - 項目に data-step があれば、目次に区切りの小見出しを入れる
+ * - 項目の切り替えは、前の項目がきゅっと縮んで消え、次の項目が少し行き過ぎてから収まるアニメーションにする
+ * - ページのスクロール中にカーソルが目次に乗っても、目次ではなくページをスクロールし続ける
  */
 function setupDigestLists() {
+	const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)")
 	for (const panel of document.querySelectorAll<HTMLElement>(".digest-items")) {
 		if (panel.dataset.ready) continue
 		panel.dataset.ready = "true"
 		const entries = [...panel.children] as HTMLElement[]
-		if (entries.length < 2) continue
+		if (entries.length === 0) continue
+
+		// カードの下半分。見出しとの区切り線と一覧を入れ、見出しから開閉できるようにする
+		const body = document.createElement("div")
+		body.className = "digest-body"
+		body.id = `digest-body-${++digestBodyCount}`
+		const inner = document.createElement("div")
+		inner.className = "digest-body-inner"
+		const content = document.createElement("div")
+		content.className = "digest-body-content"
+		const divider = document.createElement("div")
+		divider.className = "digest-divider"
+		panel.before(body)
+		body.append(inner)
+		inner.append(content)
+		content.append(divider)
+		const heading = panel.closest("section")?.querySelector<HTMLElement>(":scope > h2")
+		if (heading) setupDigestHeading(heading, body, entries.length)
+		if (entries.length < 2) {
+			content.append(panel)
+			continue
+		}
 
 		const wrap = document.createElement("div")
 		wrap.className = "digest-browser"
-		panel.before(wrap)
+		content.append(wrap)
 		const toc = document.createElement("div")
 		toc.className = "digest-toc"
 		toc.setAttribute("role", "tablist")
@@ -649,6 +750,7 @@ function setupDigestLists() {
 		panel.classList.add("switching")
 
 		let active = -1
+		let lastSwitch = 0
 		let lastStep = ""
 		const tabs = entries.map((entry, i) => {
 			const step = entry.dataset.step ?? ""
@@ -669,6 +771,8 @@ function setupDigestLists() {
 			meta.className = "digest-toc-meta"
 			meta.textContent = entry.dataset.meta ?? ""
 			tab.append(label, meta)
+			const stats = digestStats(entry)
+			if (stats) tab.append(stats)
 			tab.addEventListener("click", () => select(i, true))
 			entry.setAttribute("role", "tabpanel")
 			toc.append(tab)
@@ -721,17 +825,46 @@ function setupDigestLists() {
 			const i = Math.max(0, Math.min(entries.length - 1, index))
 			if (syncScroll) scrollTocTo(i)
 			if (i === active) return
+			const from = entries[active]
+			const to = entries[i]
+			const dir = Math.sign(i - active) || 1
 			// 見えなくなる項目の動画は止める
-			const leaving = entries[active]
-			if (leaving) {
-				for (const { frame, player } of youtubePlayers) if (leaving.contains(frame)) player.pauseVideo?.()
+			if (from) {
+				for (const { frame, player } of youtubePlayers) if (from.contains(frame)) player.pauseVideo?.()
 			}
-			active = i
-			entries.forEach((entry, j) => entry.classList.toggle("active", j === i))
+			for (const el of [from, to]) for (const a of el?.getAnimations() ?? []) a.cancel()
+			from?.classList.remove("active", "leaving")
+			to.classList.add("active")
 			tabs.forEach((tab, j) => {
 				tab.setAttribute("aria-selected", String(j === i))
 				tab.tabIndex = j === i ? 0 : -1
 			})
+			// 目次を速くスクロールして次々に切り替わるときや、初回表示ではアニメーションしない
+			const now = performance.now()
+			const animate = active !== -1 && now - lastSwitch > 90 && !reduceMotion.matches
+			active = i
+			lastSwitch = now
+			if (!animate) return
+			if (from) {
+				from.classList.add("leaving")
+				const leave = from.animate(
+					[
+						{ opacity: 1, transform: "none" },
+						{ opacity: 0, transform: `translateY(${-dir * 14}px) scale(0.94)` },
+					],
+					{ duration: 150, easing: "cubic-bezier(0.4, 0, 1, 1)" },
+				)
+				const done = () => from.classList.remove("leaving")
+				leave.finished.then(done, done)
+			}
+			to.animate(
+				[
+					{ opacity: 0, transform: `translateY(${dir * 28}px) scale(0.92)` },
+					{ opacity: 1, transform: `translateY(${-dir * 3}px) scale(1.015)`, offset: 0.6 },
+					{ opacity: 1, transform: "none" },
+				],
+				{ duration: 380, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
+			)
 		}
 
 		toc.addEventListener(
@@ -741,6 +874,18 @@ function setupDigestLists() {
 				select(tabAt(focusY()))
 			},
 			{ passive: true },
+		)
+		toc.addEventListener(
+			"wheel",
+			(e) => {
+				const now = performance.now()
+				if (now - lastPageWheel > PAGE_WHEEL_CONTINUE_MS) return
+				// ページのスクロールの途中でカーソルが乗っただけなので、目次ではなくページをスクロールする
+				lastPageWheel = now
+				e.preventDefault()
+				window.scrollBy({ top: e.deltaY * (e.deltaMode === 1 ? 16 : 1), behavior: "instant" })
+			},
+			{ passive: false },
 		)
 		toc.addEventListener("keydown", (e) => {
 			const next = { ArrowDown: active + 1, ArrowUp: active - 1, Home: 0, End: entries.length - 1 }[e.key]
