@@ -623,6 +623,22 @@ function renderTweets() {
 	document.body.appendChild(script)
 }
 
+// Bluesky 公式の埋め込み。embed.js が blockquote.bluesky-embed を iframe に差し替える。
+// ページ遷移のあとは、読み込み済みの embed.js の scan() で差し替え直す
+function renderBluesky() {
+	if (!document.querySelector("blockquote.bluesky-embed")) return
+	if (window.bluesky?.scan) {
+		window.bluesky.scan()
+		return
+	}
+	if (document.getElementById("bluesky-embed-js")) return
+	const script = document.createElement("script")
+	script.id = "bluesky-embed-js"
+	script.async = true
+	script.src = "https://embed.bsky.app/static/embed.js"
+	document.body.appendChild(script)
+}
+
 // デイリーダイジェストのカルーセル。項目数ぶんのドットと前後ボタンを付け、
 // 表示中の項目に合わせて高さを変える（縦に長い埋め込みがあっても他の項目の下が空かないように）
 // ページのスクロール中にカーソルが目次に乗っても、この時間（ms）以内に続く操作はページのスクロールとして扱う
@@ -1233,6 +1249,7 @@ function renderDigest() {
 	mediaPlayers = []
 	soundcloudWidgets = []
 	renderTweets()
+	renderBluesky()
 	setupDigestLists()
 	setupYoutube()
 	setupSoundcloud()

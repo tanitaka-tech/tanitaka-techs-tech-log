@@ -695,6 +695,100 @@
       max-width: 12rem
       accent-color: #f50
 
+  // はてなブックマークの記事のリンクカード
+  a.digest-link-card
+    display: flex
+    flex-direction: column
+    width: 100%
+    max-width: 560px
+    overflow: hidden
+    border-radius: 0.75rem
+    background: var(--card-bg)
+    color: inherit
+    text-decoration: none
+    transition: background 0.15s
+
+    &:hover
+      background: var(--btn-card-bg-hover)
+
+    img
+      display: block
+      width: 100%
+      aspect-ratio: 1.91 / 1
+      margin: 0
+      border-radius: 0
+      object-fit: cover
+      background: var(--btn-regular-bg-active)
+
+    .digest-link-body
+      display: flex
+      flex-direction: column
+      gap: 0.25rem
+      padding: 0.75rem 1rem
+
+    .digest-link-title
+      font-weight: bold
+      line-height: 1.5
+
+    .digest-link-meta
+      font-size: 0.8rem
+      opacity: 0.7
+
+  // Misskey のノートのカード（Misskey の埋め込みは他サイトに出せないので自前で描く）
+  a.digest-misskey-card
+    display: flex
+    flex-direction: column
+    gap: 0.5rem
+    width: 100%
+    max-width: 560px
+    padding: 0.75rem 1rem
+    border-radius: 0.75rem
+    background: var(--card-bg)
+    color: inherit
+    text-decoration: none
+
+    &:hover
+      background: var(--btn-card-bg-hover)
+
+    img
+      margin: 0
+
+    .digest-misskey-author
+      display: flex
+      align-items: center
+      gap: 0.5rem
+      font-size: 0.875rem
+
+      img
+        width: 2rem
+        height: 2rem
+        border-radius: 999px
+
+    .digest-misskey-text
+      white-space: pre-wrap
+      word-break: break-word
+      line-height: 1.6
+
+    .digest-misskey-images
+      display: grid
+      gap: 0.25rem
+
+      &.n2, &.n3, &.n4
+        grid-template-columns: 1fr 1fr
+
+      img
+        width: 100%
+        max-height: 360px
+        border-radius: 0.5rem
+        object-fit: cover
+
+    .digest-misskey-meta
+      font-size: 0.8rem
+      opacity: 0.7
+
+  .bluesky-embed
+    margin: 0 !important
+
   // Steam のセール情報カード（公式ウィジェットの代わり）
   a.digest-steam-card
     display: flex

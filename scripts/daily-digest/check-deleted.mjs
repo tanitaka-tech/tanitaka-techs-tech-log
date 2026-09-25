@@ -9,6 +9,8 @@ import fs from "node:fs"
 import YAML from "yaml"
 import { loadDotEnv } from "./lib/env.mjs"
 import { listItemsByFile, removeItems } from "./lib/render.mjs"
+import { findUnavailableBlueskyPosts } from "./lib/bluesky.mjs"
+import { findUnavailableNotes } from "./lib/misskey.mjs"
 import { findUnavailableTracks } from "./lib/soundcloud.mjs"
 import { findUnavailableTweets } from "./lib/x.mjs"
 import { findUnavailableVideos } from "./lib/youtube.mjs"
@@ -25,7 +27,9 @@ async function main() {
 
   const unavailable = new Set()
   const xIds = idsOf("x")
-  if (xIds.length) {
+  // X API は従量課金なので、使わない設定（x.enabled: false）の間は確かめない
+  if (xIds.length && config.x.enabled === false) console.log(`X の投稿 ${xIds.length}件は、x.enabled が false なので確かめません`)
+  else if (xIds.length) {
     for (const id of await findUnavailableTweets(xIds, process.env.X_BEARER_TOKEN)) {
       unavailable.add(`x:${id}`)
     }
@@ -44,7 +48,16 @@ async function main() {
     }
   }
 
-  console.log(`確認: X ${xIds.length}件 / YouTube ${ytIds.length}件 / SoundCloud ${scIds.length}件、取得できない項目: ${unavailable.size}件`)
+  const bskyIds = idsOf("bluesky")
+  if (bskyIds.length) {
+    for (const id of await findUnavailableBlueskyPosts(bskyIds)) unavailable.add(`bluesky:${id}`)
+  }
+  const misskeyIds = idsOf("misskey")
+  if (misskeyIds.length) {
+    for (const id of await findUnavailableNotes(misskeyIds)) unavailable.add(`misskey:${id}`)
+  }
+
+  console.log(`確認: X ${xIds.length}件 / YouTube ${ytIds.length}件 / SoundCloud ${scIds.length}件 / Bluesky ${bskyIds.length}件 / Misskey ${misskeyIds.length}件、取得できない項目: ${unavailable.size}件`)
   const lines = []
   for (const { file, keys } of files) {
     const hit = keys.filter((k) => unavailable.has(k))

@@ -1,5 +1,5 @@
 /*
- * X・YouTube・SoundCloud・Steam から、実行時点までの直近24時間（config.yaml の collect.windowHours。SoundCloud は7日）の候補を集めて
+ * はてなブックマーク・Bluesky・Misskey・YouTube・SoundCloud・Steam（と、使う設定なら X）から、実行時点までの直近24時間（config.yaml の collect.windowHours。SoundCloud は7日）の候補を集めて
  * .digest-cache/<date>/candidates.json に保存する。<date> は記事の日付（既定は今日）。
  * X は従量課金なので、保存済みなら --force を付けない限り取り直さない。
  * --genre a,b を付けると、そのジャンルだけを取り直して保存済みの候補と差し替える（失敗したジャンルの取り直し用）。
@@ -8,6 +8,9 @@
 import fs from "node:fs"
 import { readJson, writeJson } from "../lib/context.mjs"
 import { recentWindow, todayJst } from "../lib/date.mjs"
+import { searchBlueskyGenre } from "../lib/bluesky.mjs"
+import { searchHatenaGenre } from "../lib/hatena.mjs"
+import { searchMisskeyGenre } from "../lib/misskey.mjs"
 import { searchSoundcloudGenre } from "../lib/soundcloud.mjs"
 import { fetchSteamSales } from "../lib/steam.mjs"
 import { searchXGenre } from "../lib/x.mjs"
@@ -48,6 +51,12 @@ async function fetchAll(ctx, genres) {
       } else if (genre.source === "x-youtube") {
         const keys = { xToken: requireEnv("X_BEARER_TOKEN"), ytKey: requireEnv("YOUTUBE_API_KEY") }
         found = await collectXYoutubeGenre(genre, window, config, keys, budget, now, takeShare(genre), drops)
+      } else if (genre.source === "hatena") {
+        found = await searchHatenaGenre(genre, now, drops)
+      } else if (genre.source === "bluesky") {
+        found = await searchBlueskyGenre(genre, window, now, drops)
+      } else if (genre.source === "misskey") {
+        found = await searchMisskeyGenre(genre, window, now, drops)
       } else if (genre.source === "soundcloud") {
         found = await searchSoundcloudGenre(genre, now, drops)
       } else if (genre.source === "youtube") {
@@ -55,6 +64,9 @@ async function fetchAll(ctx, genres) {
       } else if (genre.source === "steam" && config.steam.enabled) {
         found = await fetchSteamSales(genre, config)
       }
+      // 同じ記事・投稿が複数のジャンルに当たったときは、先のジャンルに入れる
+      const seen = new Set(candidates.map((c) => c.key))
+      found = found.filter((c) => !seen.has(c.key))
       console.log(`[collect] ${genre.id}: ${found.length}件`)
       candidates.push(...found)
       stats[genre.id] = { reads: before - budget.remaining, candidates: found.length, drops }
