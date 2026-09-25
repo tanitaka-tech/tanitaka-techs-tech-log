@@ -1,5 +1,5 @@
 /*
- * 掲載済みの X 投稿・YouTube 動画が削除・非公開になっていないか確認し、
+ * 掲載済みの X 投稿・YouTube 動画・SoundCloud の曲が削除・非公開になっていないか確認し、
  * 取得できなくなった項目を記事から取り除く。
  *
  * 使い方: pnpm digest:check-deleted
@@ -9,6 +9,7 @@ import fs from "node:fs"
 import YAML from "yaml"
 import { loadDotEnv } from "./lib/env.mjs"
 import { listItemsByFile, removeItems } from "./lib/render.mjs"
+import { findUnavailableTracks } from "./lib/soundcloud.mjs"
 import { findUnavailableTweets } from "./lib/x.mjs"
 import { findUnavailableVideos } from "./lib/youtube.mjs"
 
@@ -36,7 +37,14 @@ async function main() {
     }
   }
 
-  console.log(`確認: X ${xIds.length}件 / YouTube ${ytIds.length}件、取得できない項目: ${unavailable.size}件`)
+  const scIds = idsOf("soundcloud")
+  if (scIds.length) {
+    for (const id of await findUnavailableTracks(scIds)) {
+      unavailable.add(`soundcloud:${id}`)
+    }
+  }
+
+  console.log(`確認: X ${xIds.length}件 / YouTube ${ytIds.length}件 / SoundCloud ${scIds.length}件、取得できない項目: ${unavailable.size}件`)
   const lines = []
   for (const { file, keys } of files) {
     const hit = keys.filter((k) => unavailable.has(k))

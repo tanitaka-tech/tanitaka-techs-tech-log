@@ -8,7 +8,7 @@
  *   curate unset  <対象>            … 対象と同じ条件のルールを消す
  *   curate list                     … ルールの一覧
  *
- * 対象: #3（候補） / author:#3（候補の投稿者） / x:123・youtube:abc（キー）
+ * 対象: #3（候補） / author:#3（候補の投稿者） / x:123・youtube:abc・soundcloud:123（キー）
  *       author:x:<ユーザーID>・author:youtube:<チャンネルID> / genre:<ジャンルID> / text:<正規表現>
  */
 import fs from "node:fs"
@@ -34,7 +34,7 @@ function parseTarget(ctx, target) {
       if (!c) throw new Error(`${ref}（${key}）の候補データが見つかりません`)
       return { match: { author: authorKey(c) }, label: `${c.author.name}（${authorKey(c)}）` }
     }
-    if (!/^(x|youtube|steam):\S+$/.test(ref)) throw new Error(`author の形式が不正です: ${ref}`)
+    if (!/^(x|youtube|soundcloud|steam):\S+$/.test(ref)) throw new Error(`author の形式が不正です: ${ref}`)
     return { match: { author: ref }, label: ref }
   }
   if (target.startsWith("genre:")) {
@@ -46,7 +46,7 @@ function parseTarget(ctx, target) {
     return { match: { text: target.slice("text:".length) }, label: `本文 /${target.slice(5)}/` }
   }
   const key = resolveKey(target, numbers)
-  if (!/^(x|youtube|steam):\S+$/.test(key)) throw new Error(`対象の形式が不正です: ${target}`)
+  if (!/^(x|youtube|soundcloud|steam):\S+$/.test(key)) throw new Error(`対象の形式が不正です: ${target}`)
   const c = candidateByKey(ctx, key)
   return { match: { key }, label: c ? `${c.title || c.text?.slice(0, 30)}（${key}）` : key }
 }
