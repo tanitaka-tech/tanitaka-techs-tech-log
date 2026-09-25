@@ -103,7 +103,7 @@ genres:
     source: x-soundcloud
     query: 'url:soundcloud.com (新曲 OR ボカロ OR 初音ミク OR 重音テト OR 可不 OR remix OR リミックス OR オリジナル曲 OR 歌ってみた OR フリーダウンロード OR "Free DL")'
     maxReads: 100
-    minSharers: 1
+    minSharers: 2 # 1人だけだと、作者が自分の曲を貼った宣伝ばかりになる
     maxTrackAgeDays: 7 # 共有は当日でも、曲の公開がこれより古いものは除く
 
   - id: ai
