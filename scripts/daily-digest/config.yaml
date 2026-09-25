@@ -14,7 +14,7 @@ article:
     - 表現の解説
     - 最新ゲーム
     - やる気が出る・元気になる
-    - セール・無料配布
+    - セール
     - 伸びているイラスト
     - 風景写真
   category: デイリーダイジェスト
@@ -102,12 +102,12 @@ genres:
     query: "(モチベーション OR やる気 OR 元気が出る OR 前向き OR 習慣化)"
 
   - id: sale
-    label: セール・無料配布
+    label: セール
     source: x
     query: "(セール OR 無料配布 OR 期間限定無料 OR 割引) (ゲーム OR ソフト OR ツール OR 素材 OR Steam)"
 
   - id: sale-steam
-    label: セール・無料配布
+    label: セール
     source: steam
 
   - id: mv

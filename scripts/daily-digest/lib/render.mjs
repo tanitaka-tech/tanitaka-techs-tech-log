@@ -56,7 +56,10 @@ function embed(c) {
       // 公式の埋め込み。本文はリポジトリに保存せず、表示は widgets.js に任せる
       return `<blockquote class="twitter-tweet" data-dnt="true"><a href="https://twitter.com/${c.author.handle}/status/${c.id}">@${escapeText(c.author.handle)} さんのポストを見る</a></blockquote>`
     case "youtube":
-      return `<iframe class="digest-youtube" src="https://www.youtube-nocookie.com/embed/${c.id}" title="${escapeAttr(c.title)}" loading="lazy" allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`
+      // 最初はサムネイルだけを出し、クリックでプレーヤー（iframe）に差し替える（Layout.astro）。
+      // iframe の上ではホイール操作がページに届かずカルーセルを送れないのと、動画が多いと重いため。
+      // JavaScript が動かない環境（RSS など）では YouTube へのリンクになる
+      return `<a class="digest-youtube-facade no-styling" href="${escapeAttr(c.url)}" data-video-id="${escapeAttr(c.id)}" data-title="${escapeAttr(c.title)}" target="_blank" rel="noopener"><img class="no-lightbox" src="${escapeAttr(thumbnail(c))}" alt="${escapeAttr(c.title)}" loading="lazy"><span class="digest-youtube-title">${escapeText(c.title)}</span><span class="digest-youtube-play" aria-hidden="true"></span></a>`
     case "steam":
       return steamCard(c)
     default:
