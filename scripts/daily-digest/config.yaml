@@ -60,6 +60,8 @@ youtube:
   minViews: 1000
   # タイトルかチャンネル名に仮名（ひらがな・カタカナ）がある動画だけ残す。ジャンルごとに上書きできる
   requireKana: true
+  excludeShorts: true # ショート動画を除く（/shorts/<ID> が開けるかで判定する）
+  maxDurationMinutes: 15 # これより長い動画（歌枠・雑談などの配信アーカイブ）を除く
 
 steam:
   enabled: true

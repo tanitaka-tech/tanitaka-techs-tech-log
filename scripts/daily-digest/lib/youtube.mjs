@@ -22,7 +22,7 @@ export async function fetchVideos(ids, key) {
   for (let i = 0; i < ids.length; i += 50) {
     const body = await ytGet(
       "/videos",
-      { part: "snippet,statistics,status", id: ids.slice(i, i + 50).join(",") },
+      { part: "snippet,statistics,status,contentDetails", id: ids.slice(i, i + 50).join(",") },
       key,
     )
     items.push(...(body.items ?? []))
@@ -40,6 +40,43 @@ export const KANA_RE = /[\u3041-\u309f\u30a1-\u30ff]/
 /** タイトルかチャンネル名に仮名が入っているか。海外の大型コンテンツを除いて日本の動画に寄せるため */
 export function hasKana(v) {
   return KANA_RE.test(v.snippet?.title ?? "") || KANA_RE.test(v.snippet?.channelTitle ?? "")
+}
+
+/** contentDetails.duration（ISO 8601 の PT1H2M3S 形式）を秒にする */
+export function durationSeconds(v) {
+  const m = (v.contentDetails?.duration ?? "").match(/^P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/)
+  if (!m) return null
+  const [d, h, min, sec] = m.slice(1).map((n) => Number(n ?? 0))
+  return ((d * 24 + h) * 60 + min) * 60 + sec
+}
+
+/**
+ * ショート動画か。API では見分けられないので、/shorts/<ID> を開いて確かめる
+ * （ショートならそのまま 200、通常の動画なら /watch へリダイレクトされる）
+ */
+async function isShort(id) {
+  const res = await fetch(`https://www.youtube.com/shorts/${id}`, {
+    redirect: "manual",
+    headers: { "User-Agent": "Mozilla/5.0" },
+  })
+  await res.body?.cancel()
+  return res.status === 200
+}
+
+/**
+ * ショートと、長すぎる動画（歌枠・雑談などの配信アーカイブ）を除く。
+ * ショートは3分まであるので、それ以下の長さの動画だけを確かめる
+ */
+export async function excludeShortsAndStreams(videos, yc) {
+  const maxSeconds = (yc.maxDurationMinutes ?? 15) * 60
+  const kept = []
+  for (const v of videos) {
+    const sec = durationSeconds(v)
+    if (sec != null && sec > maxSeconds) continue
+    if (yc.excludeShorts !== false && (sec == null || sec <= 180) && (await isShort(v.id))) continue
+    kept.push(v)
+  }
+  return kept
 }
 
 export function isEmbeddable(v) {
@@ -114,12 +151,11 @@ export async function searchYoutubeGenre(genre, window, config, key, now = new D
   if (ids.length === 0) return []
 
   const requireKana = genre.requireKana ?? yc.requireKana
-  const videos = await fetchVideos(ids, key)
-  return videos
+  const videos = (await fetchVideos(ids, key))
     .filter(isEmbeddable)
     .filter((v) => !requireKana || hasKana(v))
     .filter((v) => Number(v.statistics?.viewCount ?? 0) >= (genre.minViews ?? yc.minViews))
-    .map((v) => toYoutubeCandidate(v, genre, now))
+  return (await excludeShortsAndStreams(videos, yc)).map((v) => toYoutubeCandidate(v, genre, now))
 }
 
 /** 削除・非公開・埋め込み不可になった動画IDを返す */

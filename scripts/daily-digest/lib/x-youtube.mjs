@@ -9,7 +9,7 @@
  */
 import { hoursBetween } from "./date.mjs"
 import { xGet } from "./x.mjs"
-import { fetchVideos, hasKana, isEmbeddable, toYoutubeCandidate, youtubeVideoId } from "./youtube.mjs"
+import { excludeShortsAndStreams, fetchVideos, hasKana, isEmbeddable, toYoutubeCandidate, youtubeVideoId } from "./youtube.mjs"
 
 const TWEET_PARAMS = {
   "tweet.fields": "created_at,public_metrics,author_id,entities,possibly_sensitive",
@@ -144,10 +144,10 @@ export async function collectXYoutubeGenre(genre, window, config, { xToken, ytKe
 
   const maxAgeDays = genre.maxVideoAgeDays ?? 7
   const requireKana = genre.requireKana ?? config.youtube.requireKana
-  const videos = await fetchVideos(ids, ytKey)
-  return videos
+  const videos = (await fetchVideos(ids, ytKey))
     .filter(isEmbeddable)
     .filter((v) => !requireKana || hasKana(v))
     .filter((v) => hoursBetween(new Date(v.snippet.publishedAt), now) <= maxAgeDays * 24)
+  return (await excludeShortsAndStreams(videos, config.youtube))
     .map((v) => attachSharers(toYoutubeCandidate(v, genre, now), byVideo.get(v.id)))
 }
