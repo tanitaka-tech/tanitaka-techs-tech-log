@@ -20,7 +20,9 @@ declare global {
 			Widget: ((el: HTMLIFrameElement) => {
 				bind: (event: string, callback: () => void) => void;
 				pause: () => void;
-			}) & { Events: { PLAY: string } };
+				play: () => void;
+				setVolume: (volume: number) => void;
+			}) & { Events: { PLAY: string; READY: string } };
 		};
 		pagefind: {
 			search: (query: string) => Promise<{

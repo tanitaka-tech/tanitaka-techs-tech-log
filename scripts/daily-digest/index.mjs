@@ -1,7 +1,7 @@
 /*
  * デイリーダイジェスト記事を手元で作る。Claude Code の /digest スキルから順に呼ぶ想定。
  *
- *   pnpm digest collect [--date YYYY-MM-DD] [--force] [--x-limit N] [--fixture candidates.json]
+ *   pnpm digest collect [--date YYYY-MM-DD] [--force] [--genre id,id] [--x-limit N] [--fixture candidates.json]
  *   pnpm digest review  [--date] [--all]
  *   pnpm digest curate  <block|weight|pin|ignore-sharer|unset|list> <対象> [倍率] --reason 理由 [--until YYYY-MM-DD] [--genre ID]
  *   pnpm digest select  [--date] (--llm [--providers anthropic,openai] | --mock)
@@ -24,7 +24,7 @@ import { loadDotEnv } from "./lib/env.mjs"
 
 const HELP = `使い方: pnpm digest <コマンド> [--date YYYY-MM-DD]
 
-  collect   候補を集めて保存する（保存済みなら取り直さない。--force で取り直し）
+  collect   候補を集めて保存する（保存済みなら取り直さない。--force で取り直し、--genre a,b でそのジャンルだけ取り直し）
   review    curation.yaml を適用した候補一覧を番号付きで表示する（--all で除外・圏外も）
   curate    ルールを足す・消す（例: curate block author:#3 --reason 懸賞アカウント）
   select    API の LLM（--llm）かスコア上位（--mock）で selection.json を作る
@@ -67,7 +67,7 @@ async function main() {
 
   switch (command) {
     case "collect":
-      return collect(ctx, { force: opts.force, fixture: opts.fixture })
+      return collect(ctx, { force: opts.force, fixture: opts.fixture, genre: opts.genre })
     case "review":
       return review(ctx, { all: opts.all })
     case "curate":

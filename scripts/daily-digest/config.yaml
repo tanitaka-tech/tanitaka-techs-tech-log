@@ -45,6 +45,9 @@ llm:
       model: gemini-3.8-flash
 
 x:
+  # X API は読み取り件数あたりの費用のわりに候補が残らないので、2026-09-26 に使うのをやめた。
+  # false の間は source: x / x-youtube のジャンルを収集しない（設定は再開したときのために残す）
+  enabled: false
   # 従量課金なので、1回の実行で読み取る投稿数の上限を決めておく
   maxPostsPerRun: 600
   maxResultsPerQuery: 50 # 10〜100
@@ -85,8 +88,9 @@ genres:
     # カバー曲（歌ってみた・歌枠）は載せないので、検索の段階で除いて読み取りを節約する。
     # 「MV制作」「映像担当」などは、MV を作ったクリエイターが自分の仕事として紹介する投稿を拾うため
     query: '(url:youtube.com OR url:youtu.be) (MV OR 新曲 OR ボカロ OR 初音ミク OR アニソン OR 主題歌 OR ノンクレジット OR オリジナル曲 OR "MV制作" OR "映像担当" OR "映像制作") -歌ってみた -歌枠 -cover -カバー'
-    xWeight: 3
-    maxReads: 200
+    # 共有者2人以上に届く動画が少なく、読み取り100件あたりの候補が2件ほどだったので配分を減らした
+    xWeight: 1
+    maxReads: 100
     minSharers: 2 # 1人しか貼っていない動画は宣伝の可能性が高いので除く
     minFollowers: 500 # フォロワーが少ないアカウントの共有は数えない（宣伝用・捨てアカウント対策）
     maxVideoAgeDays: 7 # 共有は当日でも、動画の公開がこれより古いものは除く
@@ -116,9 +120,10 @@ genres:
     xWeight: 2 # リツイートの標本が多いほど人気の投稿が重なって見えるので、読み取りを多めに配分する
     maxReads: 100
     # AIで生成したイラストの作品投稿は載せないので、検索の段階で除く
-    query: '(生成AI OR LLM OR ChatGPT OR Claude OR Gemini OR "AIモデル" OR "画像生成AI" OR "動画生成AI") -AIイラスト -AIart -nijijourney -AIグラビア -キャンペーン -プレゼント'
+    # 「生成AI」で検索すると是非をめぐる論争ばかり拾うので、ツール名とリリース・新モデルの話題に寄せる
+    query: '(ChatGPT OR Claude OR Gemini OR LLM OR "AIモデル" OR "画像生成AI" OR "動画生成AI") (リリース OR 新モデル OR 新機能 OR 公開 OR 発表 OR アップデート) -AIイラスト -AIart -nijijourney -AIグラビア -キャンペーン -プレゼント'
     # 生成AIの是非をめぐる言い争いと、副業・情報商材の宣伝も除く
-    exclude: "AIイラスト|AIart|aiart|nijijourney|NovelAI|AIグラビア|#NSFW|キャンペーン|プレゼント|抽選|盗難|窃盗|犯罪|搾取|信者|月\\d+万|稼げ|副業|note販売"
+    exclude: "AIイラスト|AIart|aiart|nijijourney|NovelAI|AIグラビア|#NSFW|キャンペーン|プレゼント|抽選|盗難|窃盗|犯罪|搾取|信者|規制|消滅|手描き|反AI|無検閲|月\\d+万|稼げ|副業|note販売"
 
   - id: creative-tools
     label: 最新クリエイティブツール
@@ -137,6 +142,8 @@ genres:
     # ゲームのニュースはリツイートで広まるので、人気の投稿を拾う（関連度順では50件読んで候補2件だった）
     sampleRetweets: true
     maxReads: 80
+    # 決済会社・団体をめぐる政治的な話題と、ゲーム以外の番組の告知を除く
+    exclude: "フェミ|団体|圧力|クレカ|カード会社|規制|番組|放送"
     query: '(新作ゲーム OR 発売日 OR 配信開始 OR 新作発表 OR "Nintendo Direct" OR Steam) (ゲーム OR Switch OR PS5 OR Steam)'
 
   - id: illust
@@ -150,7 +157,7 @@ genres:
     excludeVerifiedTypes: [business, government]
     query: "(イラスト OR 絵描きさんと繋がりたい OR 落書き OR オリジナルイラスト OR 創作) -AIイラスト -AIart -nijijourney -キャンペーン -抽選 -プレゼント -グッズ -募集"
     # AI 絵のアカウントは名前に AI を入れていることが多いので、投稿者名も見る
-    exclude: "AIイラスト|AIart|aiart|nijijourney|NovelAI|StableDiffusion|#NSFW|_AI\\b|AI$|キャンペーン|抽選|プレゼント|POP ?UP|グッズ|募集|予約|くじ|発売|開催|放送|ご視聴"
+    exclude: "AIイラスト|AIart|aiart|nijijourney|NovelAI|StableDiffusion|#NSFW|_AI\\b|AI$|キャンペーン|抽選|プレゼント|POP ?UP|グッズ|募集|予約|くじ|発売|開催|放送|ご視聴|waifu|Official|公式|お誕生日"
     minLikes: 500
 
   - id: landscape
@@ -165,7 +172,7 @@ genres:
     query: "(風景写真 OR 写真好きな人と繋がりたい OR ファインダー越しの私の世界 OR 絶景 OR 夕焼け OR 星景写真) -AIイラスト -AIart -AI写真 -AI生成 -キャンペーン -抽選 -プレゼント"
     # 「絶景」「夕焼け」はイラスト・舞台の告知・人物の撮影会にも当たるので、それらを除く
     # （写真のハッシュタグだけに絞ると、候補がほとんど残らなかった）
-    exclude: "AIイラスト|AIart|AI写真|AI生成|キャンペーン|抽選|プレゼント|イラスト|Illustration|舞台|公演|撮影会|ポートレート|コスプレ|写真集|先行カット|放送|出演|企画"
+    exclude: "AIイラスト|AIart|AI写真|AI生成|キャンペーン|抽選|プレゼント|イラスト|Illustration|舞台|公演|撮影会|ポートレート|コスプレ|写真集|先行カット|放送|出演|企画|Official|公式|お誕生日"
     minLikes: 300
 
   - id: expression
@@ -208,7 +215,8 @@ genres:
     step: VTuber
     source: youtube
     videoCategoryId: "10"
-    q: "VTuber|ホロライブ|hololive|にじさんじ|ぶいすぽ|オリジナル曲"
+    # ショート・配信を除くとほとんど残らなかったので、オリジナル曲・MV に寄せる
+    q: "VTuber オリジナル曲|VTuber MV|ホロライブ オリジナル曲|にじさんじ オリジナル曲|ぶいすぽ オリジナル曲|Vsinger"
 
   - id: mv
     label: 音楽・MV
