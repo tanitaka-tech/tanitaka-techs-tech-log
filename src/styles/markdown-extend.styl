@@ -84,35 +84,140 @@
     margin-right: auto
     max-width: 100%
 
-  // デイリーダイジェストの埋め込み
-  .digest-genre
-    display: inline-block
-    padding: 0.1rem 0.6rem
-    border-radius: 999px
-    font-size: 0.8rem
-    background: var(--btn-regular-bg)
-    color: var(--btn-content)
+  // デイリーダイジェスト: カテゴリごとに埋め込みを1件ずつ表示するカルーセル。
+  // 下のドットで切り替え、横スクロール（スワイプ）でも送れる。高さは表示中の項目に合わせる（Layout.astro）
+  .digest-carousel-wrap
+    margin: 1rem 0 2.5rem
 
-  .digest-embed
-    margin: 1rem 0 2rem
+  .digest-carousel
     display: flex
-    justify-content: center
+    align-items: flex-start
+    overflow-x: auto
+    overflow-y: hidden
+    scroll-snap-type: x mandatory
+    overscroll-behavior-x: contain
+    scrollbar-width: none
+    transition: height 0.3s ease
+
+    &::-webkit-scrollbar
+      display: none
+
+    .digest-slide
+      flex: 0 0 100%
+      display: flex
+      justify-content: center
+      scroll-snap-align: start
+      scroll-snap-stop: always
 
     .twitter-tweet
-      border: none
-      padding: 0
-      margin: 0
+      margin: 0 !important
 
     iframe.digest-youtube
+      display: block
       width: 100%
       aspect-ratio: 16 / 9
       height: auto
-
-    iframe.digest-steam
-      width: 100%
-      max-width: 646px
-      height: 190px
       border: none
+      border-radius: 0.75rem
+
+  .digest-carousel-nav
+    display: flex
+    align-items: center
+    justify-content: center
+    gap: 0.25rem
+    margin-top: 0.75rem
+
+    button
+      display: flex
+      align-items: center
+      justify-content: center
+      width: 1.75rem
+      height: 1.75rem
+      border-radius: 999px
+      color: var(--primary)
+      transition: background 0.15s, opacity 0.15s
+
+      &:hover
+        background: var(--btn-plain-bg-hover)
+
+      &:disabled
+        opacity: 0.3
+        pointer-events: none
+
+    .digest-carousel-arrow
+      font-size: 1.4rem
+      line-height: 1
+
+    .digest-carousel-dot::before
+      content: ""
+      width: 0.5rem
+      height: 0.5rem
+      border-radius: 999px
+      background: var(--btn-regular-bg-active)
+      transition: width 0.2s, background 0.2s
+
+    .digest-carousel-dot[aria-current="true"]::before
+      width: 1.25rem
+      background: var(--primary)
+
+  // Steam のセール情報カード（公式ウィジェットの代わり）
+  a.digest-steam-card
+    display: flex
+    flex-direction: column
+    width: 100%
+    max-width: 460px
+    overflow: hidden
+    border-radius: 0.75rem
+    background: var(--btn-regular-bg)
+    color: inherit
+    text-decoration: none
+    transition: background 0.15s
+
+    &:hover
+      background: var(--btn-regular-bg-hover)
+
+    img
+      display: block
+      width: 100%
+      aspect-ratio: 460 / 215
+      object-fit: cover
+      margin: 0
+      border-radius: 0
+
+    .digest-steam-body
+      display: flex
+      flex-direction: column
+      gap: 0.25rem
+      padding: 0.75rem 1rem 1rem
+
+    .digest-steam-title
+      font-weight: bold
+      color: var(--deep-text)
+
+    .digest-steam-price
+      display: flex
+      align-items: baseline
+      flex-wrap: wrap
+      gap: 0.5rem
+
+      s
+        opacity: 0.6
+        font-size: 0.875rem
+
+      strong
+        font-size: 1.125rem
+        color: var(--deep-text)
+
+    .digest-steam-discount
+      padding: 0 0.4rem
+      border-radius: 0.25rem
+      font-weight: bold
+      background: #4c6b22
+      color: #beee11
+
+    .digest-steam-until
+      font-size: 0.8rem
+      opacity: 0.6
 
 a.card-github
   display: block

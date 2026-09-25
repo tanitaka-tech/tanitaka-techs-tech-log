@@ -22,6 +22,7 @@ export async function fetchSteamSales(genre, config) {
       genreLabel: genre.label,
       url: `https://store.steampowered.com/app/${i.id}/`,
       title: i.name,
+      thumbnail: i.header_image,
       text: `${i.name} が ${i.discount_percent}%オフ（¥${Math.round(i.original_price / 100)} → ¥${Math.round(i.final_price / 100)}）${
         i.discount_expiration
           ? `。セール終了: ${new Date(i.discount_expiration * 1000).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}`
@@ -30,6 +31,12 @@ export async function fetchSteamSales(genre, config) {
       author: { name: "Steam", handle: "steam" },
       publishedAt: new Date().toISOString(),
       metrics: { discountPercent: i.discount_percent },
+      sale: {
+        discountPercent: i.discount_percent,
+        originalPrice: Math.round(i.original_price / 100),
+        finalPrice: Math.round(i.final_price / 100),
+        endsAt: i.discount_expiration ? new Date(i.discount_expiration * 1000).toISOString() : null,
+      },
       // 割引率をそのままスコアにする（他ソースとは比較しない）
       score: i.discount_percent,
     }))

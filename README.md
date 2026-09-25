@@ -36,7 +36,7 @@ draft: false
 
 ## デイリーダイジェスト（自動生成記事）
 
-X・YouTube・Steam からその日（JST）に伸びた投稿を集め、Claude が選定・要約した記事の下書きを作ります。公開前に必ず人間がレビューし、PR をマージしたときだけ公開されます。
+X・YouTube・Steam からその日（JST）に伸びた投稿を集め、LLM（Claude・GPT・Gemini のうち使えるもの）が掲載する投稿を選び、カテゴリごとに埋め込みをカルーセルで並べた記事の下書きを作ります。公開前に必ず人間がレビューし、PR をマージしたときだけ公開されます。
 
 - 出力先: `src/content/posts/daily-digest/YYYY-MM-DD.md`
 - 生成記事には `自動生成` タグが付きます（手書きの記事と区別するため）
@@ -46,19 +46,22 @@ X・YouTube・Steam からその日（JST）に伸びた投稿を集め、Claude
 ### ローカルで実行
 
 ```sh
-cp .env.example .env   # X_BEARER_TOKEN / YOUTUBE_API_KEY / ANTHROPIC_API_KEY を記入
+cp .env.example .env   # X_BEARER_TOKEN / YOUTUBE_API_KEY と、LLM の API キー（1つ以上）を記入
 
 pnpm digest                        # 今日分を生成
 pnpm digest --date 2026-09-25      # 対象日を指定
 pnpm digest --x-limit 100          # X の読み取り件数を抑えて試す（80以上推奨）
-pnpm digest --mock-llm             # Claude を呼ばずに収集と記事の組み立てだけ試す
+pnpm digest --llm gemini,openai    # 使う LLM と順番を指定（既定は config.yaml の llm.providers 順）
+pnpm digest --mock-llm             # LLM を呼ばずに収集と記事の組み立てだけ試す
+pnpm digest --fixture .digest-cache/2026-09-25/candidates.json --selection selection.json
+                                   # 収集済みの候補と手書きの選定結果から記事を作る
 pnpm digest:check-deleted          # 削除・非公開になった掲載項目を記事から取り除く
 pnpm dev                           # 生成された記事を確認
 ```
 
 ### GitHub Actions で実行
 
-リポジトリの Secrets に `X_BEARER_TOKEN` / `YOUTUBE_API_KEY` / `ANTHROPIC_API_KEY` を登録し、Settings → Actions → General で「Allow GitHub Actions to create and approve pull requests」を有効にしておきます。
+リポジトリの Secrets に `X_BEARER_TOKEN` / `YOUTUBE_API_KEY` と、`ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `GEMINI_API_KEY` のいずれか（複数あればフォールバックに使われる）を登録し、Settings → Actions → General で「Allow GitHub Actions to create and approve pull requests」を有効にしておきます。
 
 1. Actions → **Daily Digest** → Run workflow（対象日は空なら今日）
 2. `auto-digest` ラベル付きの PR が作られるので、チェックリストに沿ってレビュー

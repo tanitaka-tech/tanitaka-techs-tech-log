@@ -18,11 +18,11 @@ export async function xGet(path, params, token) {
 
 /**
  * ジャンルのクエリで指定日の投稿を検索し、候補に変換する。
- * budget.remaining を超えて読み取らない（従量課金対策）。
+ * budget.remaining を超えて読み取らない（従量課金対策）。share はこのジャンルに割り当てた読み取り件数。
  */
-export async function searchXGenre(genre, window, config, token, budget, now = new Date()) {
+export async function searchXGenre(genre, window, config, token, budget, now = new Date(), share = Infinity) {
   const xc = config.x
-  const maxResults = Math.min(xc.maxResultsPerQuery, budget.remaining)
+  const maxResults = Math.min(xc.maxResultsPerQuery, budget.remaining, share)
   if (maxResults < 10) {
     console.warn(`[x] 読み取り上限に達したため ${genre.id} をスキップ`)
     return []

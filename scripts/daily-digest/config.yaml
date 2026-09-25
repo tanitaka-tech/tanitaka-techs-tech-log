@@ -3,15 +3,36 @@
 
 article:
   minItems: 5 # これ未満しか採用できなければ記事を作らない
-  maxItems: 8
+  maxItems: 16
+  maxItemsPerCategory: 4 # 同じカテゴリはカルーセルにまとめるので、数件まで載せる
+  # 記事内でのカテゴリの表示順。genres の label をすべて並べる（抜けていると実行時にエラー）
+  categoryOrder:
+    - 音楽・MV
+    - 最新AI技術
+    - 最新クリエイティブツール
+    - ツールの使い方・使いこなし術
+    - 表現の解説
+    - 最新ゲーム
+    - やる気が出る・元気になる
+    - セール・無料配布
+    - 伸びているイラスト
+    - 風景写真
   category: デイリーダイジェスト
   # 手書きの記事と見分けるため、生成記事に必ず付けるタグ
   tags: [自動生成]
   dir: src/content/posts/daily-digest
 
 llm:
-  model: claude-opus-5
   candidatesPerGenre: 6 # ジャンルごとにLLMへ渡す上位候補数
+  # 上から順に試し、失敗（残高不足・障害・拒否など）したら次へフォールバックする。
+  # APIキー（ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY）が未設定のものは飛ばす。
+  providers:
+    - provider: anthropic
+      model: claude-opus-5
+    - provider: openai
+      model: gpt-6-sol
+    - provider: gemini
+      model: gemini-3.8-flash
 
 x:
   # 従量課金なので、1回の実行で読み取る投稿数の上限を決めておく
@@ -33,11 +54,15 @@ steam:
   minDiscountPercent: 50
   maxItems: 10
 
+# 並び順 = X の読み取り上限が足りないときの優先順（記事内の表示順は article.categoryOrder）。
+# 上限は X ジャンルで均等に分けるが、1ジャンルあたり10件未満になると後ろから順にスキップされる。
+# （YouTube・Steam は上限を消費しないので位置は関係ない。sale は Steam で補えるので X の中では最後）
 genres:
   - id: ai
     label: 最新AI技術
     source: x
-    query: '(生成AI OR LLM OR ChatGPT OR Claude OR Gemini OR "AIモデル" OR "画像生成AI" OR "動画生成AI")'
+    # AIで生成したイラストの作品投稿は載せないので、検索の段階で除く
+    query: '(生成AI OR LLM OR ChatGPT OR Claude OR Gemini OR "AIモデル" OR "画像生成AI" OR "動画生成AI") -AIイラスト -AIart -nijijourney -AIグラビア'
 
   - id: creative-tools
     label: 最新クリエイティブツール
@@ -49,16 +74,22 @@ genres:
     source: x
     query: '(Blender OR Photoshop OR "CLIP STUDIO" OR クリスタ OR Figma OR "After Effects" OR "DaVinci Resolve" OR Procreate) (Tips OR 小技 OR やり方 OR 使い方 OR 時短 OR ショートカット)'
 
-  - id: illust
-    label: 伸びているイラスト
-    source: x
-    query: "(イラスト OR 絵描きさんと繋がりたい OR 落書き) has:images -is:quote"
-    minLikes: 500
-
   - id: games
     label: 最新ゲーム
     source: x
     query: '(新作ゲーム OR 発売日 OR 配信開始 OR 新作発表 OR "Nintendo Direct" OR Steam) (ゲーム OR Switch OR PS5 OR Steam)'
+
+  - id: illust
+    label: 伸びているイラスト
+    source: x
+    query: "(イラスト OR 絵描きさんと繋がりたい OR 落書き) has:images -is:quote -AIイラスト -AIart -nijijourney"
+    minLikes: 500
+
+  - id: landscape
+    label: 風景写真
+    source: x
+    query: "(風景写真 OR 写真好きな人と繋がりたい OR ファインダー越しの私の世界 OR 絶景 OR 夕焼け) has:images -is:quote -AIイラスト -AIart -AI写真 -AI生成"
+    minLikes: 300
 
   - id: expression
     label: 表現の解説
@@ -80,13 +111,13 @@ genres:
     source: steam
 
   - id: mv
-    label: MV
+    label: 音楽・MV
     source: youtube
     videoCategoryId: "10"
     q: "MV|ミュージックビデオ|Music Video"
 
   - id: music
-    label: 音楽
+    label: 音楽・MV
     source: youtube
     videoCategoryId: "10"
     q: ""
