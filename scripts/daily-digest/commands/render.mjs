@@ -25,6 +25,7 @@ export function render(ctx, { force = false, final = false } = {}) {
   }
 
   const { entries, numbers } = runReview(ctx)
+  const duplicatesByKey = new Map(entries.filter((e) => e.duplicates).map((e) => [e.c.key, e.duplicates]))
   const available = new Map(entries.filter((e) => !e.excluded).map((e) => [e.c.key, e]))
   const raw = readJson(ctx.paths.selection)
 
@@ -60,6 +61,13 @@ export function render(ctx, { force = false, final = false } = {}) {
   // プレビューでは上限を超えても載せ、どれを外すか人間が決められるようにする（カテゴリ・記事全体ごとに1行で知らせる）
   for (const [label, n] of perCategory) {
     if (n > categoryLimit(label)) overLimit.push(`${label}: 採用 ${n}件（上限 ${categoryLimit(label)}件）`)
+  }
+  // 同じものらしい項目を両方採用していたら知らせる（1組につき1行）
+  const adoptedNos = new Set(items.filter((i) => i.adopt !== false).map((i) => `#${numbers[i.key]}`))
+  for (const i of items) {
+    const no = `#${numbers[i.key]}`
+    const both = (duplicatesByKey.get(i.key) ?? []).filter((d) => adoptedNos.has(no) && adoptedNos.has(d) && d > no)
+    for (const d of both) warnings.push(`${no} と ${d} は同じものかもしれません（どちらも採用中）`)
   }
   const adopted = items.filter((i) => i.adopt !== false).length
   if (adopted > config.article.maxItems) {
