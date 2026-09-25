@@ -1,0 +1,18 @@
+# デイリーダイジェストの候補に人間の判断を反映するルール。
+# 手で編集してもよいが、`pnpm digest curate ...` を使うと候補番号（#3 など）から ID を引いて書き込める。
+#
+# match（書いた条件をすべて満たす候補に当たる）:
+#   key:    個別の投稿・動画（x:<投稿ID> / youtube:<動画ID> / steam:<appID>）
+#   author: 投稿者（x:<ユーザーID> / youtube:<チャンネルID>）。X の @handle は変わるので使わない
+#   genre:  config.yaml の genres の id（x-music / vtuber など）
+#   text:   本文・タイトルに対する正規表現（大文字小文字は区別しない）
+#   sharer: X のユーザーID（x:<ユーザーID>）。action: ignore-sharer 専用
+#
+# action:
+#   block:         候補から外す
+#   weight:        スコアに weight を掛ける（2 なら倍、0.5 なら半分）。当たったルールの weight はすべて掛け合わせる
+#   pin:           スコアや block に関係なく候補一覧に必ず残す（掲載済みのものは除く）
+#   ignore-sharer: X で YouTube を貼ったアカウントを共有者数に数えない（宣伝・bot 対策）
+#
+# reason と added は必須。until（YYYY-MM-DD）を書くと、その日を過ぎたら効かなくなる。
+rules: []
