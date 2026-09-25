@@ -18,7 +18,9 @@ X・YouTube・SoundCloud・Steam で伸びた投稿から記事 `src/content/pos
 pnpm -s digest collect --date <date>
 ```
 
-- X の読み取りは従量課金。保存済み（`.digest-cache/<date>/candidates.json`）なら取り直さないので、そのまま進む。
+- X API は2026-09-26 から使っていない（`config.yaml` の `x.enabled: false`）。X のジャンルは集めずにスキップされる。
+- 保存済み（`.digest-cache/<date>/candidates.json`）なら取り直さないので、そのまま進む。
+- 一部のジャンルだけ失敗したときは `--genre <ジャンルID,...>` でそのジャンルだけ取り直せる（保存済みの候補と差し替わる）。
 - `--force` で取り直すのは、ユーザーが明示的に頼んだときだけ。
 - 同じ日に2回目を実行しても、保存済みの候補（1回目の実行から24時間分）を使う。最新の24時間で取り直したいときは `--force`。
 - 前日の記事と期間が重なる投稿は、掲載済みなら自動で候補から外れる。
