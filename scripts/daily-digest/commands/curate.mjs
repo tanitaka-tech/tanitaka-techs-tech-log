@@ -7,6 +7,7 @@
  *   curate ignore-sharer <@handle | x:ユーザーID> --reason 理由
  *   curate unset  <対象>            … 対象と同じ条件のルールを消す
  *   curate list                     … ルールの一覧
+ *   curate prune                    … 期限（until）を過ぎたルールを消す
  *
  * 対象: #3（候補） / author:#3（候補の投稿者） / youtube:abc・pixiv:123 など（キー。lib/sources.mjs のソース）
  *       author:youtube:<チャンネルID>・author:bluesky:<DID> など / genre:<ジャンルID> / text:<正規表現>
@@ -81,6 +82,17 @@ export function curate(ctx, positionals, opts) {
     return
   }
 
+  if (action === "prune") {
+    const removed = removeRules(doc, (r) => r.until && String(r.until) < ctx.date)
+    if (removed.length === 0) {
+      console.log("期限切れのルールはありません")
+      return
+    }
+    saveCuration(doc)
+    for (const r of removed) console.log(`削除: ${describeRule(r)} ${r.reason}（〜 ${r.until}）`)
+    return
+  }
+
   if (action === "unset") {
     const { match, label } = parseTarget(ctx, target)
     if (opts.genre) match.genre = opts.genre
@@ -103,7 +115,7 @@ export function curate(ctx, positionals, opts) {
       match.genre = opts.genre
     }
   } else {
-    throw new Error(`不明な操作です: ${action}（block / weight / pin / ignore-sharer / unset / list）`)
+    throw new Error(`不明な操作です: ${action}（block / weight / pin / ignore-sharer / unset / list / prune）`)
   }
 
   const rule = { match, action }

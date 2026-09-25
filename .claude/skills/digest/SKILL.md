@@ -106,6 +106,7 @@ pnpm -s digest render --date <date>
 | 「懸賞っぽい投稿は下げて」 | `curate weight 'text:フォロー.?RT' 0.3 --reason <理由>`（text は正規表現） |
 | 「今月だけ」 | どのルールにも `--until YYYY-MM-DD` を付ける |
 | 「さっきのルール取り消して」 | `curate unset <同じ対象>`（`curate list` で確認できる） |
+| 「期限切れのルールを片付けて」 | `curate prune`（`review` の最後に「期限切れのルール N件」と出たら提案する） |
 | 「#4 は今回は外して」「#6 と差し替え」 | ルールにはせず、選定（selection.json）だけを直す |
 
 - ルールにするか今回だけにするか分からないときは、ユーザーに聞く。
