@@ -9,8 +9,8 @@
 import { createHash } from "node:crypto"
 import { hoursBetween } from "./date.mjs"
 import { filterWithReasons } from "./drops.mjs"
+import { politeFetch } from "./http.mjs"
 
-const HEADERS = { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko)" }
 
 /** RSS の文字参照（&#x3042; など）を戻す */
 function decode(s) {
@@ -27,7 +27,7 @@ const tag = (xml, name) => xml.match(new RegExp(`<${name}>([\\s\\S]*?)</${name}>
 
 /** カテゴリ（it / game / knowledge など）の人気エントリー（list が entrylist なら新着エントリー）を読む */
 export async function fetchHotentries(category, list = "hotentry") {
-  const res = await fetch(`https://b.hatena.ne.jp/${list}/${category}.rss`, { headers: HEADERS })
+  const res = await politeFetch(`https://b.hatena.ne.jp/${list}/${category}.rss`)
   if (!res.ok) throw new Error(`はてなブックマーク ${res.status} ${list}/${category}`)
   const xml = await res.text()
   return [...xml.matchAll(/<item [\s\S]*?<\/item>/g)].map(([item]) => ({
@@ -43,7 +43,7 @@ export async function fetchHotentries(category, list = "hotentry") {
 /** 記事ページの og:image（リンクカードの画像）を読む。取れなければ undefined */
 export async function fetchOgImage(url) {
   try {
-    const res = await fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(8000) })
+    const res = await politeFetch(url, { signal: AbortSignal.timeout(8000) })
     if (!res.ok) return undefined
     const html = (await res.text()).slice(0, 300_000)
     const m =
@@ -58,7 +58,7 @@ export async function fetchOgImage(url) {
 /** タグ検索の RSS（新しい順、ブックマーク minUsers 以上）を読む */
 export async function fetchTagEntries(tagName, minUsers = 3) {
   const url = `https://b.hatena.ne.jp/q/${encodeURIComponent(tagName)}?target=tag&sort=recent&users=${minUsers}&safe=on&mode=rss`
-  const res = await fetch(url, { headers: HEADERS })
+  const res = await politeFetch(url)
   if (!res.ok) throw new Error(`はてなブックマーク ${res.status} タグ検索 ${tagName}`)
   const xml = await res.text()
   return [...xml.matchAll(/<item [\s\S]*?<\/item>/g)].map(([item]) => ({
@@ -73,7 +73,7 @@ export async function fetchTagEntries(tagName, minUsers = 3) {
 
 /** サイトの RSS 1.0 / 2.0 / Atom を読む。ブックマーク数はあとで数える */
 export async function fetchFeed(feedUrl) {
-  const res = await fetch(feedUrl, { headers: HEADERS })
+  const res = await politeFetch(feedUrl)
   if (!res.ok) throw new Error(`RSS ${res.status} ${feedUrl}`)
   const xml = await res.text()
   const text = (s) => decode((s ?? "").replace(/^<!\[CDATA\[|\]\]>$/g, "").replace(/<[^>]+>/g, "")).trim()
@@ -93,7 +93,7 @@ export async function fetchBookmarkCounts(urls) {
   for (let i = 0; i < urls.length; i += 50) {
     const api = new URL("https://bookmark.hatenaapis.com/count/entries")
     for (const u of urls.slice(i, i + 50)) api.searchParams.append("url", u)
-    const res = await fetch(api, { headers: HEADERS })
+    const res = await politeFetch(api)
     if (!res.ok) throw new Error(`はてなブックマーク件数 API ${res.status}`)
     for (const [u, n] of Object.entries(await res.json())) counts.set(u, n)
   }
@@ -184,7 +184,7 @@ export async function findUnavailableArticles(urls) {
   const missing = []
   for (const [id, url] of urls) {
     try {
-      const res = await fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(10000) })
+      const res = await politeFetch(url, { signal: AbortSignal.timeout(10000) })
       if (res.status === 404 || res.status === 410) missing.push(id)
     } catch (e) {
       console.warn(`[hatena] ${url} を確かめられませんでした: ${e.message}`)

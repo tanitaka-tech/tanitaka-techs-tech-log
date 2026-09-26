@@ -19,6 +19,7 @@ pnpm -s digest collect --date <date>
 ```
 
 - X API は2026-09-26 から使っていない（`config.yaml` の `x.enabled: false`）。X のジャンルは集めずにスキップされる。
+- はてなブックマークは robots.txt の Crawl-delay（5秒）を守って読むので、収集に数分かかる。バックグラウンドで実行して待つ。
 - 保存済み（`.digest-cache/<date>/candidates.json`）なら取り直さないので、そのまま進む。
 - 一部のジャンルだけ失敗したときは `--genre <ジャンルID,...>` でそのジャンルだけ取り直せる（保存済みの候補と差し替わる）。
 - `--force` で取り直すのは、ユーザーが明示的に頼んだときだけ。

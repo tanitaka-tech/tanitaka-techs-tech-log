@@ -1,6 +1,7 @@
 import { hoursBetween } from "./date.mjs"
 import { countDrop } from "./drops.mjs"
 import { velocity, xEngagement } from "./score.mjs"
+import { politeFetch } from "./http.mjs"
 
 const API = "https://api.x.com/2"
 
@@ -9,7 +10,7 @@ export async function xGet(path, params, token) {
   for (const [k, v] of Object.entries(params)) {
     if (v !== undefined && v !== "") url.searchParams.set(k, String(v))
   }
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+  const res = await politeFetch(url, { headers: { Authorization: `Bearer ${token}` } })
   const body = await res.json().catch(() => ({}))
   if (!res.ok) {
     throw new Error(`X API ${res.status} ${path}: ${JSON.stringify(body).slice(0, 500)}`)

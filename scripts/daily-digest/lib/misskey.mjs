@@ -6,14 +6,12 @@
 import { hoursBetween } from "./date.mjs"
 import { filterWithReasons } from "./drops.mjs"
 import { velocity } from "./score.mjs"
+import { politeFetch } from "./http.mjs"
 
-const HEADERS = {
-  "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko)",
-  "Content-Type": "application/json",
-}
+const HEADERS = { "Content-Type": "application/json" }
 
 async function misskeyPost(host, endpoint, body) {
-  const res = await fetch(`https://${host}/api/${endpoint}`, { method: "POST", headers: HEADERS, body: JSON.stringify(body) })
+  const res = await politeFetch(`https://${host}/api/${endpoint}`, { method: "POST", headers: HEADERS, body: JSON.stringify(body) })
   const json = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(`Misskey ${res.status} ${host}/api/${endpoint}: ${json.error?.message ?? ""}`)
   return json
@@ -75,7 +73,7 @@ export async function searchMisskeyGenre(genre, window, now = new Date(), drops 
 export async function findUnavailableNotes(ids, host = "misskey.io") {
   const missing = []
   for (const id of ids) {
-    const res = await fetch(`https://${host}/api/notes/show`, { method: "POST", headers: HEADERS, body: JSON.stringify({ noteId: id }) })
+    const res = await politeFetch(`https://${host}/api/notes/show`, { method: "POST", headers: HEADERS, body: JSON.stringify({ noteId: id }) })
     if (res.status === 400 || res.status === 404) missing.push(id)
     else if (!res.ok) throw new Error(`Misskey ${res.status} notes/show`)
   }
