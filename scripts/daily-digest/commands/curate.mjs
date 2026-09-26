@@ -7,15 +7,17 @@
  *   curate ignore-sharer <@handle | x:ユーザーID> --reason 理由
  *   curate unset  <対象>            … 対象と同じ条件のルールを消す
  *   curate list                     … ルールの一覧
+ *   curate prune                    … 期限（until）を過ぎたルールを消す
  *
- * 対象: #3（候補） / author:#3（候補の投稿者） / x:123・youtube:abc・soundcloud:123（キー）
- *       author:x:<ユーザーID>・author:youtube:<チャンネルID> / genre:<ジャンルID> / text:<正規表現>
+ * 対象: #3（候補） / author:#3（候補の投稿者） / youtube:abc・pixiv:123 など（キー。lib/sources.mjs のソース）
+ *       author:youtube:<チャンネルID>・author:bluesky:<DID> など / genre:<ジャンルID> / text:<正規表現>
  */
 import fs from "node:fs"
 import { addRule, authorKey, CURATION_PATH, describeRule, loadCuration, removeRules, saveCuration } from "../lib/curation.mjs"
 import { readJson } from "../lib/context.mjs"
 import { todayJst } from "../lib/date.mjs"
 import { resolveKey } from "../lib/review.mjs"
+import { KEY_RE } from "../lib/sources.mjs"
 
 function candidateByKey(ctx, key) {
   const list = fs.existsSync(ctx.paths.candidates) ? readJson(ctx.paths.candidates) : []
@@ -34,7 +36,7 @@ function parseTarget(ctx, target) {
       if (!c) throw new Error(`${ref}（${key}）の候補データが見つかりません`)
       return { match: { author: authorKey(c) }, label: `${c.author.name}（${authorKey(c)}）` }
     }
-    if (!/^(x|youtube|soundcloud|steam|hatena|bluesky|misskey|pixiv):\S+$/.test(ref)) throw new Error(`author の形式が不正です: ${ref}`)
+    if (!KEY_RE.test(ref)) throw new Error(`author の形式が不正です: ${ref}`)
     return { match: { author: ref }, label: ref }
   }
   if (target.startsWith("genre:")) {
@@ -46,7 +48,7 @@ function parseTarget(ctx, target) {
     return { match: { text: target.slice("text:".length) }, label: `本文 /${target.slice(5)}/` }
   }
   const key = resolveKey(target, numbers)
-  if (!/^(x|youtube|soundcloud|steam|hatena|bluesky|misskey|pixiv):\S+$/.test(key)) throw new Error(`対象の形式が不正です: ${target}`)
+  if (!KEY_RE.test(key)) throw new Error(`対象の形式が不正です: ${target}`)
   const c = candidateByKey(ctx, key)
   return { match: { key }, label: c ? `${c.title || c.text?.slice(0, 30)}（${key}）` : key }
 }
@@ -80,6 +82,17 @@ export function curate(ctx, positionals, opts) {
     return
   }
 
+  if (action === "prune") {
+    const removed = removeRules(doc, (r) => r.until && String(r.until) < ctx.date)
+    if (removed.length === 0) {
+      console.log("期限切れのルールはありません")
+      return
+    }
+    saveCuration(doc)
+    for (const r of removed) console.log(`削除: ${describeRule(r)} ${r.reason}（〜 ${r.until}）`)
+    return
+  }
+
   if (action === "unset") {
     const { match, label } = parseTarget(ctx, target)
     if (opts.genre) match.genre = opts.genre
@@ -102,7 +115,7 @@ export function curate(ctx, positionals, opts) {
       match.genre = opts.genre
     }
   } else {
-    throw new Error(`不明な操作です: ${action}（block / weight / pin / ignore-sharer / unset / list）`)
+    throw new Error(`不明な操作です: ${action}（block / weight / pin / ignore-sharer / unset / list / prune）`)
   }
 
   const rule = { match, action }

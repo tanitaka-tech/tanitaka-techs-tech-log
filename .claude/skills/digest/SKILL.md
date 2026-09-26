@@ -35,9 +35,17 @@ pnpm -s digest review --date <date>
 
 - 出力と `.digest-cache/<date>/shortlist.json`（本文・共有者などの詳細）を読む。
 - `scripts/daily-digest/selection-guide.md` の選定基準を読む。
-- `.digest-cache/<date>/selection.json` に、候補一覧（shortlist）の**すべて**を入れる（書き方は 4.）。
-  - おすすめの候補は `"adopt": true`、それ以外は `"adopt": false` にしておく。カテゴリの上限（`config.yaml` の `article`）に収まるように選ぶ。
-  - 基準に引っかかる候補（炎上・懸賞・AIイラスト・性的な内容への言及など）も外さず、`note` に理由を書いて `adopt: false` にする。note はプレビューで項目の上に ⚠️ として表示される。
+- 候補一覧（shortlist）の**すべて**を入れた下書きを作る。おすすめ（`adopt: true`）は、カテゴリと記事全体の上限に収まるよう、step・ジャンルごとにスコア上位から機械的に選ばれる。
+
+```sh
+pnpm -s digest select --draft --date <date>
+```
+
+- 下書きの `.digest-cache/<date>/selection.json` を直す（書き方は 4.）。items を1件ずつ書き直す必要はなく、直すのは次の点だけ。
+  - `topic`・`description` を書く（空のままだと render が止まる）。`topicKey` も見直す。
+  - 基準に引っかかる候補（炎上・懸賞・AIイラスト・性的な内容への言及など）は外さず、`note` に理由を書いて `adopt: false` にする。note はプレビューで項目の上に ⚠️ として表示される。
+  - 機械的なおすすめより良い候補があれば `adopt` を入れ替える。上限を超えないように、入れた分だけ外す。
+- selection.json がすでにあると、`select --draft` は note・adopt・並びを残したまま、まだない候補（ルールを変えて増えた候補など）を不採用で足すだけ。作り直すのはユーザーが頼んだときだけ（`--reset`）。
 - 記事を書き出す。既定はプレビュー用で、先頭に警告の一覧（収集エラー・上限超え・note）が出る。
 
 ```sh
@@ -48,7 +56,10 @@ pnpm -s digest render --date <date>
 - プレビューでは、目次の項目ごとに「✅ 採用 / ⛔ 不採用」のトグルが出る（押すと切り替わる）。ユーザーはブログの中で切り替えられ、`selection.json` の `adopt` に保存される（`pnpm dev` の開発サーバーの API で保存するので、ビルドした記事では動かない）。見出しには「採用 N / 上限 M」が出る。
 - 目次の 🖼 を押すと、その項目の画像が記事のサムネイルになる（`selection.json` の `topicKey` に保存。記事の画像は公開用に書き直すときに変わる）。画像のない項目（X・pixiv）には出ない。
 - 項目は目次のドラッグで並べ替えられる。`selection.json` の順が変わり（`ordered: true`）、ページは読み込み直さずにその場で並び替わる。公開用もその順で載る。
+- バナーの入力欄で、タイトル（`topic`）と説明（`description`）を書き換えて保存できる。記事に出すには `render` し直す。
+- 項目の上の「ルール」から、その項目・投稿者を今後出さない（block。今回の記事からも不採用にする）・強める・弱める・推すルールを `curation.yaml` に足せる（理由はその場で入力）。
 - ユーザーが「選んだ」「切り替えた」と言ったら、`selection.json` の `adopt` を読み直してから次に進む（チャットで項目を言い直してもらう必要はない）。
+- ユーザーがプレビューでルールを足したと言ったら、`curate list` で確かめ、`review` → `select --draft`（足りない候補を足す）→ `render` をやり直して、並びや除外の変化を短く伝える。
 
 ## 3. 候補を見せて聞く
 
@@ -58,8 +69,9 @@ pnpm -s digest render --date <date>
 - おすすめ（`adopt: true` にした候補）には ✅ を付ける。
 - note を付けた候補には ⚠️ と理由を付ける。**勝手に除外せず、判断はユーザーに任せる**。
 - 収集エラーや、候補が少ないカテゴリがあれば書く。
-- 出力の最後の「ジャンルごとの歩留まり」で、X の読み取りのわりに候補が残らないジャンルがあれば、検索の見直し（`config.yaml` の query・exclude・sampleRetweets など）を提案する。
-- 最後に、ルールにしてよさそうなものを提案する（例:「#12 の投稿者は懸賞ばかりなので block しますか？」）。
+- review に「重複かも: #N」と出た候補（ソースをまたいで同じ絵・同じゲームなど）は、どちらか一方だけをおすすめにし、もう一方の note に「#N と同じ」と書く。
+- 出力の最後の「ジャンルごとの歩留まり」で、候補が少ない・ルールで多く外れる・掲載に至らないジャンルがあれば、条件の見直し（`config.yaml` の include・exclude・tags・minLikes・minBookmarks など。「収集で除外」の内訳が多い理由の条件）を提案する。
+- 最後に、ルールにしてよさそうなものを提案する（例:「#12 の投稿者は懸賞ばかりなので block しますか？」）。`pnpm -s digest stats` で、直近の日の採用・不採用から出した提案（続けて採用されないジャンル・投稿者など）も見て、当てはまるものを添える。提案をそのまま実行せず、ユーザーに聞く。
 
 ## 4. 選定の形式と添削
 
@@ -80,7 +92,7 @@ pnpm -s digest render --date <date>
 - topic と description は `selection-guide.md` の「書き方」に従う。
 - 「タイトルを変えて」「説明を短く」: `topic` / `description` を直して `render` し直す。
 - 項目の採用・不採用の切り替え: ブログのトグルか、`items` の `adopt` を直す（render し直さなくても、公開用に書き直すときに反映される）。
-- 項目の追加: `items` に足して `render` し直す。
+- 項目の追加: `items` に足して `render` し直す。ルールを変えて候補一覧が変わったら `select --draft` で足りない候補を足す。
 - 記事の .md は `render` で上書きされるので、直接は編集しない。
 
 ## 指示を反映する
@@ -94,10 +106,11 @@ pnpm -s digest render --date <date>
 | 「VTuber 少し強めに」「AI の話題は控えめに」 | `curate weight genre:vtuber 1.5 --reason <理由>`（強めは 1.5〜2、控えめは 0.5 前後から） |
 | 「この人の曲は優先して」 | `curate weight author:#7 2 --reason <理由>` |
 | 「#9 は絶対入れて」「推し」 | `curate pin '#9' --reason <理由>` に加え、選定にも入れる |
-| 「@xxx は bot なので共有者から外して」 | `curate ignore-sharer @xxx --reason <理由>` |
+| 「@xxx は bot なので共有者から外して」（X を使っている間だけ） | `curate ignore-sharer @xxx --reason <理由>` |
 | 「懸賞っぽい投稿は下げて」 | `curate weight 'text:フォロー.?RT' 0.3 --reason <理由>`（text は正規表現） |
 | 「今月だけ」 | どのルールにも `--until YYYY-MM-DD` を付ける |
 | 「さっきのルール取り消して」 | `curate unset <同じ対象>`（`curate list` で確認できる） |
+| 「期限切れのルールを片付けて」 | `curate prune`（`review` の最後に「期限切れのルール N件」と出たら提案する） |
 | 「#4 は今回は外して」「#6 と差し替え」 | ルールにはせず、選定（selection.json）だけを直す |
 
 - ルールにするか今回だけにするか分からないときは、ユーザーに聞く。

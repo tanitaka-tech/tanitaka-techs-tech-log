@@ -25,6 +25,7 @@ export function render(ctx, { force = false, final = false } = {}) {
   }
 
   const { entries, numbers } = runReview(ctx)
+  const duplicatesByKey = new Map(entries.filter((e) => e.duplicates).map((e) => [e.c.key, e.duplicates]))
   const available = new Map(entries.filter((e) => !e.excluded).map((e) => [e.c.key, e]))
   const raw = readJson(ctx.paths.selection)
 
@@ -61,6 +62,13 @@ export function render(ctx, { force = false, final = false } = {}) {
   for (const [label, n] of perCategory) {
     if (n > categoryLimit(label)) overLimit.push(`${label}: 採用 ${n}件（上限 ${categoryLimit(label)}件）`)
   }
+  // 同じものらしい項目を両方採用していたら知らせる（1組につき1行）
+  const adoptedNos = new Set(items.filter((i) => i.adopt !== false).map((i) => `#${numbers[i.key]}`))
+  for (const i of items) {
+    const no = `#${numbers[i.key]}`
+    const both = (duplicatesByKey.get(i.key) ?? []).filter((d) => adoptedNos.has(no) && adoptedNos.has(d) && d > no)
+    for (const d of both) warnings.push(`${no} と ${d} は同じものかもしれません（どちらも採用中）`)
+  }
   const adopted = items.filter((i) => i.adopt !== false).length
   if (adopted > config.article.maxItems) {
     overLimit.push(`記事全体: 採用 ${adopted}件（上限 ${config.article.maxItems}件）`)
@@ -86,6 +94,9 @@ export function render(ctx, { force = false, final = false } = {}) {
     topicKey = items[0].key
   }
 
+  // note（注意）を付けた項目は不採用にしておく決まりなので、採用のままなら見落としでないか分かるよう印を付ける。
+  // プレビューの採用トグルは記事を書き出し直さないので、記事の警告には付けない（古くなる）
+  const noteLine = (i) => `#${numbers[i.key]}: ${i.note}${i.adopt !== false ? "（採用中）" : ""}`
   const collected = readJson(ctx.paths.collect, {})
   // プレビューの記事の先頭に出す警告。公開する記事（--final）には出さない
   const reviewWarnings = final
@@ -114,7 +125,7 @@ export function render(ctx, { force = false, final = false } = {}) {
 
   console.log(`${articlePath} を書き出しました${final ? "（公開用）" : "（プレビュー用。警告を記事に表示しています）"}: ${topic} ${date}`)
   for (const [label, n] of perCategory) console.log(`  ${label}: ${n}件`)
-  for (const i of items.filter((i) => i.note)) console.log(`  ⚠️ #${numbers[i.key]} ${i.note}`)
+  for (const i of items.filter((i) => i.note)) console.log(`  ⚠️ ${noteLine(i)}`)
   for (const w of [...warnings, ...overLimit]) console.log(`  ⚠️ ${w}`)
   console.log(`\nプレビュー（pnpm dev）: http://localhost:4321/tanitaka-techs-tech-log/posts/daily-digest/${date}/`)
 }

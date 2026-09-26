@@ -39,12 +39,12 @@ export function review(ctx, { all = false } = {}) {
 }
 
 /**
- * ジャンルごとの歩留まり（X 読み取り → 候補 → ルールで残った件数 → 記事に載った件数）。
- * 読み取りのわりに残らないジャンルは、クエリを絞るか読み取りの配分を減らす
+ * ジャンルごとの歩留まり（候補 → ルールで残った件数 → 記事に載った件数。X のジャンルは読み取り件数も）。
+ * 候補が少ない・ルールで多く外れるジャンルは、収集の条件（include・exclude・下限など）を見直す
  */
 function formatYield(ctx, entries, stats) {
   const published = new Set(listItemsByFile(ctx.config.article.dir).find((f) => f.file === ctx.articlePath)?.keys)
-  const lines = ["\n## ジャンルごとの歩留まり（X 読み取り → 候補 → ルール適用後 → 記事に掲載）"]
+  const lines = ["\n## ジャンルごとの歩留まり（候補 → ルール適用後 → 記事に掲載。X は読み取り件数から）"]
   for (const g of ctx.config.genres) {
     const s = stats[g.id]
     if (!s) continue

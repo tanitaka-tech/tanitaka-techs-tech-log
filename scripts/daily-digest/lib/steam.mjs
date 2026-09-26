@@ -144,3 +144,18 @@ export async function fetchSteamNewReleases(genre, now = new Date(), drops = {})
   console.log(`[steam] ${genre.id}: 発売から${genre.maxReleaseAgeDays ?? 1}日以内 ${apps.length}本から ${candidates.length}本`)
   return candidates
 }
+
+/** ストアの情報が返らない（ストアから削除された）アプリ・パッケージの ID を返す。セールの項目はパッケージのこともある */
+export async function findUnavailableApps(ids) {
+  const missing = []
+  const exists = async (api, param, id) => {
+    const res = await fetch(`https://store.steampowered.com/api/${api}?${param}=${id}&cc=jp&filters=basic`)
+    if (!res.ok) throw new Error(`Steam ${res.status} ${api} ${id}`)
+    // 別のアプリ ID に引き継がれたゲームは、キーが指定した ID と違うことがある
+    return Object.values((await res.json()) ?? {}).some((v) => v?.success)
+  }
+  for (const id of ids) {
+    if (!(await exists("appdetails", "appids", id)) && !(await exists("packagedetails", "packageids", id))) missing.push(id)
+  }
+  return missing
+}

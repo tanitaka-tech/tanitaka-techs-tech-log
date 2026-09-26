@@ -175,3 +175,20 @@ export async function searchHatenaGenre(genre, now = new Date(), drops = {}) {
   for (const e of entries) candidates.push(toHatenaCandidate(e, genre, now, await fetchOgImage(e.url)))
   return candidates
 }
+
+/**
+ * 記事が消えた（404・410 になる）項目の ID を返す。urls は ID → 記事の URL。
+ * 一時的な障害やアクセス制限で消えたと誤って判定しないよう、それ以外の失敗は消えたことにしない
+ */
+export async function findUnavailableArticles(urls) {
+  const missing = []
+  for (const [id, url] of urls) {
+    try {
+      const res = await fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(10000) })
+      if (res.status === 404 || res.status === 410) missing.push(id)
+    } catch (e) {
+      console.warn(`[hatena] ${url} を確かめられませんでした: ${e.message}`)
+    }
+  }
+  return missing
+}

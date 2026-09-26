@@ -12,6 +12,7 @@
     "new-post": "node scripts/new-post.js",
     "digest": "node scripts/daily-digest/index.mjs",
     "digest:check-deleted": "node scripts/daily-digest/check-deleted.mjs",
+    "test:digest": "node --test \"scripts/daily-digest/test/*.test.mjs\"",
     "format": "biome format --write ./src",
     "lint": "biome check --write ./src",
     "preinstall": "npx only-allow pnpm"

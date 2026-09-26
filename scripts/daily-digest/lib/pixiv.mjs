@@ -75,3 +75,14 @@ export async function searchPixivGenre(genre, now = new Date(), drops = {}) {
   console.log(`[pixiv] ${genre.id}: ランキング ${byId.size}件から ${works.length}件`)
   return works.map((w) => toPixivCandidate(w, genre, now))
 }
+
+/** 削除・非公開になった作品の ID を返す（作品の情報の API が 404 になるもの） */
+export async function findUnavailableWorks(ids) {
+  const missing = []
+  for (const id of ids) {
+    const res = await fetch(`https://www.pixiv.net/ajax/illust/${id}`, { headers: HEADERS })
+    if (res.status === 404) missing.push(id)
+    else if (!res.ok) throw new Error(`pixiv ${res.status} ajax/illust/${id}`)
+  }
+  return missing
+}

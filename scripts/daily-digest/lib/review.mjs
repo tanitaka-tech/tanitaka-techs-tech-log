@@ -4,7 +4,9 @@
  */
 import { activeRules, applyRules, authorKey, loadCuration } from "./curation.mjs"
 import { readCandidates, readJson, writeJson } from "./context.mjs"
+import { findDuplicates } from "./duplicates.mjs"
 import { loadUsedKeys } from "./render.mjs"
+import { sourceOf } from "./sources.mjs"
 
 export function buildReview(ctx, candidates, { rules, usedKeys }) {
   const { config, genreById, stepOrder } = ctx
@@ -76,11 +78,23 @@ export function runReview(ctx) {
   const entries = buildReview(ctx, readCandidates(ctx), { rules: active, usedKeys })
   const numbers = assignNumbers(entries, readJson(ctx.paths.numbers, {}))
   writeJson(ctx.paths.numbers, numbers)
+  markDuplicates(entries)
   writeJson(
     ctx.paths.shortlist,
     entries.filter((e) => e.shortlisted).map((e) => toShortlistItem(e)),
   )
   return { entries, numbers, expired: rules.length - active.length }
+}
+
+/** ソースをまたいで同じものらしい候補に、相手の番号（e.duplicates）を付ける。除外された候補は見ない */
+export function markDuplicates(entries) {
+  const kept = entries.filter((e) => !e.excluded)
+  const noByKey = new Map(kept.map((e) => [e.c.key, e.no]))
+  const dups = findDuplicates(kept.map((e) => e.c))
+  for (const e of kept) {
+    const others = dups.get(e.c.key)
+    if (others) e.duplicates = others.map((k) => `#${noByKey.get(k)}`)
+  }
 }
 
 function toShortlistItem(e) {
@@ -105,6 +119,8 @@ function toShortlistItem(e) {
     weight: e.weight,
     pinned: e.pinned || undefined,
     rules: e.applied.length ? e.applied : undefined,
+    // ソースをまたいで同じものかもしれない候補の番号
+    maybeDuplicateOf: e.duplicates,
   }
 }
 
@@ -117,19 +133,8 @@ export function resolveKey(ref, numbers) {
   return key
 }
 
-const fmt = (n) => Number(n ?? 0).toLocaleString("ja-JP")
-
 export function formatMetrics(c) {
-  const m = c.metrics
-  if (c.source === "x") return `♥${fmt(m.like_count)} RT${fmt(m.retweet_count)} 👁${m.impression_count != null ? fmt(m.impression_count) : "-"}`
-  if (c.source === "youtube") return `▶${fmt(m.views)} 👍${fmt(m.likes)}${m.sharers ? ` 🔗${m.sharers}人` : ""}`
-  if (c.source === "hatena") return `🔖${fmt(m.bookmarks)}users`
-  if (c.source === "bluesky") return `♥${fmt(m.likes)} RP${fmt(m.reposts)}`
-  if (c.source === "misskey") return `😀${fmt(m.reactions)} RN${fmt(m.renotes)}${c.images?.length ? ` 🖼${c.images.length}` : ""}`
-  if (c.source === "pixiv") return `♥${fmt(m.ratings)} 👁${fmt(m.views)} ${m.rank}位`
-  if (c.source === "soundcloud") return `▶${fmt(m.plays)} ♥${fmt(m.likes)}${m.sharers ? ` 🔗${m.sharers}人` : ""}`
-  if (m.players != null) return `👥${fmt(m.players)}人`
-  return `-${m.discountPercent}%`
+  return sourceOf(c.source)?.metrics(c) ?? ""
 }
 
 function oneLine(s, max) {
@@ -141,7 +146,7 @@ function formatEntry(e, selected) {
   const c = e.c
   const marks = `${selected.has(c.key) ? "✅" : ""}${e.pinned ? "📌" : ""}`
   const weight = e.weight !== 1 ? `（×${Number(e.weight.toFixed(3))}）` : ""
-  const who = ["x", "bluesky", "misskey"].includes(c.source) ? `${c.author.name} @${c.author.handle}` : c.author.name
+  const who = sourceOf(c.source)?.social ? `${c.author.name} @${c.author.handle}` : c.author.name
   const lines = [
     `#${e.no ?? "-"} ${marks}${marks ? " " : ""}${c.score.toFixed(2)}${weight} ${formatMetrics(c)} | ${who} [author:${authorKey(c)}] {${c.genre}}`,
     `    ${oneLine(c.title || c.text, 90)}`,
@@ -150,6 +155,7 @@ function formatEntry(e, selected) {
   if (c.sharedBy?.length) lines.push(`    共有: ${c.sharedBy.slice(0, 8).join(" ")}${c.sharedBy.length > 8 ? " …" : ""}`)
   if (e.applied.length) lines.push(`    ルール: ${e.applied.join(" ")}`)
   if (e.excluded) lines.push(`    除外: ${e.excluded}`)
+  if (e.duplicates) lines.push(`    重複かも: ${e.duplicates.join(" ")}`)
   return lines.join("\n")
 }
 

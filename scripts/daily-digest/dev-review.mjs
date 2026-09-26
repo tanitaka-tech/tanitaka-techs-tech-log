@@ -6,8 +6,12 @@
  *   POST /__digest/adopt  { date, key, adopt } → selection.json の該当項目の adopt を書き換える
  *   POST /__digest/order  { date, keys }       → keys（1つのカテゴリの項目）をこの順に並べ替える
  *   POST /__digest/thumbnail { date, key }     → 記事のサムネイルにする項目（selection.json の topicKey）を key にする
+ *   POST /__digest/meta  { date, topic, description } → 記事のタイトル（の前半）と説明を書き換える
+ *   POST /__digest/curate { date, key, scope, action, weight?, reason }
+ *        → curation.yaml にルールを足す（scope: item はその項目、author はその投稿者。action: block / weight / pin）。
+ *          候補一覧の並びが変わるので、反映は pnpm digest review / select --draft / render のやり直しで
  *
- * GET は { adopt, order, thumbnail: <topicKey の候補のキー> } を返す。
+ * GET は { adopt, order, thumbnail: <topicKey の候補のキー>, topic, description } を返す。
  * 記事（.md）は書き出し直さない（書き出すと開発サーバーがページを読み込み直すため）。
  * プレビューの画面は GET の order で並べ直し、公開用に書き出すとき（render --final）に selection.json の順が使われる。
  *
@@ -15,12 +19,18 @@
  */
 import fs from "node:fs"
 import path from "node:path"
+import { addRule, authorKey, describeRule, loadCuration, removeRules, saveCuration } from "./lib/curation.mjs"
+import { todayJst } from "./lib/date.mjs"
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
 function paths(date) {
   const dir = path.join(".digest-cache", date)
-  return { selection: path.join(dir, "selection.json"), numbers: path.join(dir, "numbers.json") }
+  return {
+    selection: path.join(dir, "selection.json"),
+    numbers: path.join(dir, "numbers.json"),
+    candidates: path.join(dir, "candidates.json"),
+  }
 }
 
 const readJson = (file, fallback) => (fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : fallback)
@@ -66,7 +76,7 @@ export function digestReview() {
               const adopt = Object.fromEntries(selection.items.map((i) => [resolve(i.key), i.adopt !== false]))
               const order = selection.ordered ? selection.items.map((i) => resolve(i.key)) : []
               const thumbnail = selection.topicKey ? resolve(selection.topicKey) : ""
-              return send(res, 200, { adopt, order, thumbnail })
+              return send(res, 200, { adopt, order, thumbnail, topic: selection.topic ?? "", description: selection.description ?? "" })
             }
             if (req.method === "POST" && url.pathname === "/__digest/adopt") {
               const { date, key, adopt } = JSON.parse(await readBody(req))
@@ -96,6 +106,42 @@ export function digestReview() {
               selection.topicKey = item.key
               fs.writeFileSync(file, `${JSON.stringify(selection, null, 2)}\n`)
               return send(res, 200, { key })
+            }
+            if (req.method === "POST" && url.pathname === "/__digest/meta") {
+              const { date, topic, description } = JSON.parse(await readBody(req))
+              if (!DATE_RE.test(date ?? "") || typeof topic !== "string" || typeof description !== "string") {
+                return send(res, 400, { error: "date・topic・description を指定してください" })
+              }
+              const file = paths(date).selection
+              const selection = readJson(file, null)
+              if (!selection) return send(res, 404, { error: `${file} がありません` })
+              selection.topic = topic.trim()
+              selection.description = description.trim()
+              fs.writeFileSync(file, `${JSON.stringify(selection, null, 2)}\n`)
+              return send(res, 200, { topic: selection.topic, description: selection.description })
+            }
+            if (req.method === "POST" && url.pathname === "/__digest/curate") {
+              const { date, key, scope, action, weight, reason } = JSON.parse(await readBody(req))
+              if (!DATE_RE.test(date ?? "") || typeof key !== "string" || !["item", "author"].includes(scope)) {
+                return send(res, 400, { error: "date・key・scope（item / author）を指定してください" })
+              }
+              if (!["block", "weight", "pin"].includes(action)) return send(res, 400, { error: "action は block / weight / pin です" })
+              const candidate = readJson(paths(date).candidates, []).find((c) => c.key === key)
+              if (!candidate) return send(res, 404, { error: `${key} は候補にありません` })
+              const match = scope === "author" ? { author: authorKey(candidate) } : { key }
+              const rule = { match, action }
+              if (action === "weight") rule.weight = Number(weight)
+              rule.reason = String(reason ?? "").trim()
+              rule.added = todayJst()
+              const { doc } = loadCuration()
+              // curate コマンドと同じく、同じ条件・同じ操作のルールは置き換える（addRule が中身を確かめる）
+              const replaced = removeRules(
+                doc,
+                (r) => r.action === action && Object.keys(r.match).length === 1 && r.match[Object.keys(match)[0]] === Object.values(match)[0],
+              )
+              addRule(doc, rule)
+              saveCuration(doc)
+              return send(res, 200, { rule: `${describeRule(rule)} ${rule.reason}`, replaced: replaced.length > 0 })
             }
             if (req.method === "POST" && url.pathname === "/__digest/order") {
               const { date, keys } = JSON.parse(await readBody(req))
