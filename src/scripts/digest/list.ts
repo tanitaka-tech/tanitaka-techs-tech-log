@@ -150,7 +150,9 @@ export function setupDigestLists() {
 			embed.addEventListener("click", () => {
 				if (!frame.src) frame.src = url;
 				frame.hidden = !frame.hidden;
-				embed.textContent = frame.hidden ? "ページを埋め込む" : "埋め込みを閉じる";
+				embed.textContent = frame.hidden
+					? "ページを埋め込む"
+					: "埋め込みを閉じる";
 			});
 			tools.append(embed, open);
 			entry.prepend(tools);
@@ -198,7 +200,8 @@ export function setupDigestLists() {
 				const index = tabs.indexOf(tab);
 				commit(index);
 				const url = entries[index]?.dataset.url;
-				if (url?.startsWith("https://")) window.open(url, "_blank", "noopener,noreferrer");
+				if (url?.startsWith("https://"))
+					window.open(url, "_blank", "noopener,noreferrer");
 				main.scrollIntoView({ behavior: scrollBehavior(), block: "nearest" });
 			});
 			if (canHover.matches)
