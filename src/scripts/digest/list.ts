@@ -126,6 +126,36 @@ export function setupDigestLists() {
 			setupDigestHeading(heading, entries.length);
 		}
 		const hasMedia = entries.some(isMediaEntry);
+		for (const entry of entries) {
+			const url = entry.dataset.url;
+			if (!url || !/^https:\/\//i.test(url)) continue;
+			const tools = document.createElement("div");
+			tools.className = "digest-page-tools";
+			const embed = document.createElement("button");
+			embed.type = "button";
+			embed.className = "digest-page-embed-toggle";
+			embed.textContent = "ページを埋め込む";
+			const open = document.createElement("a");
+			open.href = url;
+			open.target = "_blank";
+			open.rel = "noopener noreferrer";
+			open.textContent = "元ページを開く ↗";
+			const frame = document.createElement("iframe");
+			frame.className = "digest-page-frame";
+			frame.title = `${entry.dataset.label || "記事"} の元ページ`;
+			frame.loading = "lazy";
+			frame.referrerPolicy = "no-referrer";
+			frame.setAttribute("sandbox", "allow-scripts allow-forms allow-popups");
+			frame.hidden = true;
+			embed.addEventListener("click", () => {
+				if (!frame.src) frame.src = url;
+				frame.hidden = !frame.hidden;
+				embed.textContent = frame.hidden ? "ページを埋め込む" : "埋め込みを閉じる";
+			});
+			tools.append(embed, open);
+			entry.prepend(tools);
+			entry.append(frame);
+		}
 		if (entries.length < 2) {
 			content.append(panel);
 			if (hasMedia) content.append(createVolumeControl());
@@ -164,7 +194,13 @@ export function setupDigestLists() {
 			text.append(label, meta);
 			tab.append(digestThumb(entry), text);
 			// 並べ替えで位置が変わるので、番号ではなくその時点の位置で選ぶ
-			tab.addEventListener("click", () => commit(tabs.indexOf(tab)));
+			tab.addEventListener("click", () => {
+				const index = tabs.indexOf(tab);
+				commit(index);
+				const url = entries[index]?.dataset.url;
+				if (url?.startsWith("https://")) window.open(url, "_blank", "noopener,noreferrer");
+				main.scrollIntoView({ behavior: scrollBehavior(), block: "nearest" });
+			});
 			if (canHover.matches)
 				tab.addEventListener("mouseenter", () =>
 					hoverSelect(tabs.indexOf(tab)),
@@ -379,13 +415,24 @@ export function setupDigestLists() {
 		toc.addEventListener("touchend", endScrub);
 		toc.addEventListener("touchcancel", endScrub);
 
-		// 項目の高さを一番高い項目に揃える（埋め込みの読み込みで高さが変わるたびに更新）。
-		// 縦に長い項目は高さを抑えて中でスクロールさせる
+		// 埋め込みの読み込み中は高さが変わるため、カルーセルの高さは現在の最大値から
+		// 小さくしない。Bluesky の iframe が個別に高さを調整するたびに記事全体が
+		// 上下するのを防ぐ。画面幅が変わったときだけ新しい幅で測り直す。
 		const resize = () => {
+			const width = wrap.clientWidth;
+			if (width !== measuredWidth) {
+				measuredWidth = width;
+				maxHeight = 0;
+			}
 			for (const entry of entries) limitIfTall(entry);
 			const height = Math.max(...entries.map((entry) => entry.offsetHeight));
-			wrap.style.setProperty("--digest-height", `${height}px`);
+			if (height > maxHeight) {
+				maxHeight = height;
+				wrap.style.setProperty("--digest-height", `${height}px`);
+			}
 		};
+		let measuredWidth = wrap.clientWidth;
+		let maxHeight = 0;
 		const observer = new ResizeObserver(resize);
 		for (const entry of entries) observer.observe(entry);
 		resize();

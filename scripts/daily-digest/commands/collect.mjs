@@ -17,6 +17,8 @@ import { fetchSteamNewReleases, fetchSteamSales } from "../lib/steam.mjs"
 import { searchXGenre } from "../lib/x.mjs"
 import { collectXYoutubeGenre } from "../lib/x-youtube.mjs"
 import { searchYoutubeGenre } from "../lib/youtube.mjs"
+import { boostCharacterIllustration } from "../lib/score.mjs"
+import { searchSections } from "../lib/ai-search.mjs"
 
 function requireEnv(name) {
   const v = process.env[name]
@@ -73,6 +75,7 @@ async function fetchAll(ctx, genres) {
       } else if (genre.source === "steam" && config.steam.enabled) {
         found = await fetchSteamSales(genre, config)
       }
+      found = found.map((candidate) => boostCharacterIllustration(candidate, genre))
       // 同じ記事・投稿が複数のジャンルに当たったときは、先のジャンルに入れる
       const seen = new Set(candidates.map((c) => c.key))
       found = found.filter((c) => !seen.has(c.key))
@@ -85,6 +88,7 @@ async function fetchAll(ctx, genres) {
       errors.push({ genre: genre.id, message: e.message })
     }
   }
+  candidates.push(...await searchSections(config, now, new Set(genres.map((g) => g.id))))
   return { candidates, errors, stats, window, xReads: config.x.maxPostsPerRun - budget.remaining }
 }
 

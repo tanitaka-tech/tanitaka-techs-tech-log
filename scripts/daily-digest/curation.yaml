@@ -50,6 +50,11 @@ rules:
     reason: 無許可のリミックス（bootleg）は載せない
     added: 2026-09-26
   - match:
+      text: イントロ.?クイズ|アニソン.*クイズ|アニメ.*クイズ|クイズ.*アニメ
+    action: block
+    reason: アニメ・アニソンのクイズ動画は載せない
+    added: 2026-09-27
+  - match:
       text: PV|Trailer|トレーラー|ティザー|予告
       genre: x-music
     action: block
