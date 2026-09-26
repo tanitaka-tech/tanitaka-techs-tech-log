@@ -3,10 +3,11 @@ import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import { describe, it } from "node:test"
+import { render } from "../commands/render.mjs"
 import { listItemsByFile, loadUsedKeys, removeItems, renderArticle } from "../lib/render.mjs"
 import { makeCandidate, makeCtx } from "./helpers.mjs"
 
-function article({ review = null, keepOrder = false, items, candidates, topicKey } = {}) {
+function article({ review = null, keepOrder = false, items, candidates, topicKey, draft = true } = {}) {
   const ctx = makeCtx()
   const cs =
     candidates ??
@@ -30,6 +31,7 @@ function article({ review = null, keepOrder = false, items, candidates, topicKey
     stepOrder: ctx.stepOrder,
     review,
     keepOrder,
+    draft,
   })
 }
 
@@ -81,10 +83,20 @@ describe("renderArticle", () => {
 })
 
 describe("掲載済みの項目の読み取りと削除", () => {
+  it("下書きは掲載済み判定・削除確認から除外し、draft のない既存記事は対象にする", (t) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "digest-"))
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
+    fs.writeFileSync(path.join(dir, "draft.md"), article({ candidates: [makeCandidate({ id: "draft" })] }))
+    fs.writeFileSync(path.join(dir, "public.md"), article({ draft: false, candidates: [makeCandidate({ id: "public" })] }))
+    fs.writeFileSync(path.join(dir, "legacy.md"), article({ candidates: [makeCandidate({ id: "legacy" })] }).replace("draft: true\n", ""))
+    assert.deepEqual([...loadUsedKeys(dir)].sort(), ["youtube:legacy", "youtube:public"])
+    assert.deepEqual(listItemsByFile(dir).flatMap((f) => f.keys).sort(), ["youtube:legacy", "youtube:public"])
+  })
+
   it("記事ごとのキーを読み、消した項目だけのカテゴリは見出しごと消す", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "digest-"))
-    fs.writeFileSync(path.join(dir, "2026-09-25.md"), article())
-    fs.writeFileSync(path.join(dir, "2026-09-26.md"), article({ candidates: [makeCandidate({ id: "x9" })] }))
+    fs.writeFileSync(path.join(dir, "2026-09-25.md"), article({ draft: false }))
+    fs.writeFileSync(path.join(dir, "2026-09-26.md"), article({ draft: false, candidates: [makeCandidate({ id: "x9" })] }))
 
     assert.deepEqual([...loadUsedKeys(dir, { exclude: ["2026-09-26.md"] })], ["youtube:v1", "youtube:m1", "hatena:h1"])
     const file = path.join(dir, "2026-09-25.md")
@@ -95,5 +107,35 @@ describe("掲載済みの項目の読み取りと削除", () => {
     const listed = listItemsByFile(dir).find((f) => f.file === file)
     assert.deepEqual(listed.keys, ["youtube:v1", "youtube:m1"])
     assert.equal(listed.urls.get("youtube:v1"), "https://example.com/v1")
+  })
+})
+
+describe("render の公開状態", () => {
+  it("再生成・final 整形では下書きを維持し、公開時だけ採用項目を draft: false で出力する", (t) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "digest-render-"))
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
+    const ctx = makeCtx()
+    ctx.config.article.dir = path.join(dir, "posts")
+    ctx.articlePath = path.join(ctx.config.article.dir, `${ctx.date}.md`)
+    ctx.paths = Object.fromEntries(["candidates", "selection", "numbers", "shortlist", "collect"].map((name) => [name, path.join(dir, `${name}.json`)]))
+    const cs = [makeCandidate({ id: "draft-test-keep" }), makeCandidate({ id: "draft-test-skip" })]
+    fs.writeFileSync(ctx.paths.candidates, JSON.stringify(cs))
+    fs.writeFileSync(ctx.paths.selection, JSON.stringify({ topic: "下書きの検証", items: cs.map((c, i) => ({ key: c.key, adopt: i === 0 })) }))
+    const read = () => fs.readFileSync(ctx.articlePath, "utf8")
+
+    render(ctx)
+    assert.match(read(), /^draft: true$/m)
+    assert.match(read(), /digest-review-banner/)
+    assert.match(read(), /<!-- digest-item youtube:draft-test-skip -->/)
+    render(ctx)
+    assert.match(read(), /^draft: true$/m)
+    render(ctx, { final: true })
+    assert.match(read(), /^draft: true$/m)
+    assert.doesNotMatch(read(), /digest-review-banner|<!-- digest-item youtube:draft-test-skip -->/)
+    render(ctx, { final: true, draft: false })
+    assert.match(read(), /^draft: false$/m)
+    assert.match(read(), /<!-- digest-item youtube:draft-test-keep -->/)
+    assert.doesNotMatch(read(), /digest-review-banner|<!-- digest-item youtube:draft-test-skip -->/)
+    assert.throws(() => render(ctx, { draft: false }), /final/)
   })
 })

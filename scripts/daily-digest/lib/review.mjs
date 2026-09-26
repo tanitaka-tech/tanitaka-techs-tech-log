@@ -2,13 +2,15 @@
  * 収集済みの候補に curation.yaml を適用し、ジャンルごとの上位を「候補一覧」として番号付きで並べる。
  * 番号は対象日ごとに numbers.json に保存し、ルールを足して並びが変わっても同じ候補は同じ番号のままにする。
  */
+import fs from "node:fs"
+import path from "node:path"
 import { activeRules, applyRules, authorKey, loadCuration } from "./curation.mjs"
 import { readCandidates, readJson, writeJson } from "./context.mjs"
 import { findDuplicates } from "./duplicates.mjs"
-import { loadUsedKeys } from "./render.mjs"
+import { loadArticleKeys, loadUsedKeys } from "./render.mjs"
 import { sourceOf } from "./sources.mjs"
 
-export function buildReview(ctx, candidates, { rules, usedKeys }) {
+export function buildReview(ctx, candidates, { rules, usedKeys, previousDayKeys = new Set() }) {
   const { config, genreById, stepOrder } = ctx
   const perGenre = config.review.candidatesPerGenre
   const categoryRank = (c) => config.article.categoryOrder.indexOf(c.genreLabel)
@@ -31,6 +33,7 @@ export function buildReview(ctx, candidates, { rules, usedKeys }) {
     if (seen.has(e.c.key)) continue
     seen.add(e.c.key)
     if (usedKeys.has(e.c.key)) e.excluded = "掲載済み"
+    else if (previousDayKeys.has(e.c.key)) e.excluded = "前日に収集済み"
     else if (e.blocked) e.excluded = e.blocked
     entries.push(e)
   }
@@ -60,7 +63,7 @@ export function assignNumbers(entries, numbers) {
   let next = Math.max(0, ...Object.values(numbers)) + 1
   for (const group of [entries.filter((e) => e.shortlisted), entries.filter((e) => !e.shortlisted)]) {
     for (const e of group) {
-      if (e.excluded === "掲載済み") continue
+      if (e.excluded) continue
       numbers[e.c.key] ??= next++
     }
   }
@@ -74,8 +77,17 @@ export function runReview(ctx) {
   const active = activeRules(rules, ctx.date)
   // 作成中の記事に載っている項目は「掲載済み」にしない
   const usedKeys = loadUsedKeys(ctx.config.article.dir, { exclude: [`${ctx.date}.md`] })
+  const previousDate = new Date(`${ctx.date}T12:00:00Z`)
+  previousDate.setUTCDate(previousDate.getUTCDate() - 1)
+  const previousDay = previousDate.toISOString().slice(0, 10)
+  const previousCache = path.join(".digest-cache", previousDay, "candidates.json")
+  const previousArticle = path.join(ctx.config.article.dir, `${previousDay}.md`)
+  const previousDayKeys = loadArticleKeys(previousArticle)
+  if (fs.existsSync(previousCache)) {
+    for (const candidate of JSON.parse(fs.readFileSync(previousCache, "utf8"))) previousDayKeys.add(candidate.key)
+  }
 
-  const entries = buildReview(ctx, readCandidates(ctx), { rules: active, usedKeys })
+  const entries = buildReview(ctx, readCandidates(ctx), { rules: active, usedKeys, previousDayKeys })
   const numbers = assignNumbers(entries, readJson(ctx.paths.numbers, {}))
   writeJson(ctx.paths.numbers, numbers)
   markDuplicates(entries)

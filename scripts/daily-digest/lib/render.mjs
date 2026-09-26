@@ -1,9 +1,15 @@
 import fs from "node:fs"
 import path from "node:path"
+import YAML from "yaml"
 import { SOURCES, sourceOf } from "./sources.mjs"
 
 const ITEM_RE = /<!-- digest-item (\w+):(\S+) -->[\s\S]*?<!-- \/digest-item -->\n*/g
 const SECTION_RE = /<!-- digest-section -->[\s\S]*?<!-- \/digest-section -->\n*/g
+
+function isDraftArticle(text) {
+  const frontmatter = text.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/)
+  return frontmatter ? YAML.parse(frontmatter[1])?.draft === true : false
+}
 
 function escapeText(s) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
@@ -116,6 +122,8 @@ function embed(c) {
       return steamCard(c)
     case "hatena":
       return hatenaCard(c)
+    case "web":
+      return `<a class="digest-link-card no-styling" href="${escapeAttr(c.url)}" target="_blank" rel="noopener">${thumbnail(c) ? `<img class="no-lightbox" src="${escapeAttr(thumbnail(c))}" alt="" loading="lazy">` : ""}<span class="digest-link-body"><span class="digest-link-title">${escapeText(c.title)}</span><span class="digest-link-meta">${escapeText(c.author.name)} · AI検索</span></span></a>`
     case "bluesky":
       // 公式の埋め込み（embed.bsky.app の embed.js が iframe に差し替える。読み込みは Layout.astro）
       return `<blockquote class="bluesky-embed" data-bluesky-uri="${escapeAttr(c.uri)}" data-bluesky-cid="${escapeAttr(c.cid)}"><a href="${escapeAttr(c.url)}">@${escapeText(c.author.handle)} さんの Bluesky の投稿を見る</a></blockquote>`
@@ -145,6 +153,7 @@ function tocLabel(c) {
     case "youtube":
     case "soundcloud":
     case "hatena":
+    case "web":
     case "pixiv":
       return { label: c.title, meta: c.author.name }
     case "steam": {
@@ -199,6 +208,7 @@ export function renderArticle({
   review = null,
   categoryLimit = () => Number.POSITIVE_INFINITY,
   keepOrder = false,
+  draft = true,
 }) {
   const items = selection.items.map((i) => ({ ...i, c: candidatesByKey.get(i.key) }))
   const groups = new Map()
@@ -226,7 +236,7 @@ export function renderArticle({
     `image: ${JSON.stringify(image ?? "")}`,
     `tags: ${JSON.stringify(tags)}`,
     `category: ${JSON.stringify(category)}`,
-    "draft: false",
+    `draft: ${draft}`,
     `lang: ""`,
     "---",
   ].join("\n")
@@ -245,7 +255,7 @@ ${list
     const meta = `${notes.length ? "⚠️ " : ""}${tocLabel(c).meta}`
     const noteHtml = notes.length ? `<p class="digest-review-note">⚠️ ${escapeText(notes.join(" / "))}</p>\n` : ""
     return `<!-- digest-item ${c.source}:${c.id} -->
-<div class="digest-entry digest-entry-${c.source}"${review ? ` data-key="${escapeAttr(c.key)}" data-adopt="${adopt !== false}"${thumbnail(c) ? ` data-image="${escapeAttr(thumbnail(c))}"` : ""}` : ""} data-label="${escapeAttr(tocLabel(c).label)}" data-meta="${escapeAttr(meta)}"${tocThumb(c) ? ` data-thumb="${escapeAttr(tocThumb(c))}"` : ""}${c.step ? ` data-step="${escapeAttr(c.step)}"` : ""}>
+<div class="digest-entry digest-entry-${c.source}" data-url="${escapeAttr(c.url)}"${review ? ` data-key="${escapeAttr(c.key)}" data-adopt="${adopt !== false}"${thumbnail(c) ? ` data-image="${escapeAttr(thumbnail(c))}"` : ""}` : ""} data-label="${escapeAttr(tocLabel(c).label)}" data-meta="${escapeAttr(meta)}"${tocThumb(c) ? ` data-thumb="${escapeAttr(tocThumb(c))}"` : ""}${c.step ? ` data-step="${escapeAttr(c.step)}"` : ""}>
 ${noteHtml}${embed(c)}
 </div>
 <!-- /digest-item -->
@@ -267,18 +277,26 @@ ${review ? reviewBanner(review, date, selection.topicKey) : ""}${body}
 `
 }
 
-/** 過去のダイジェスト記事に掲載済みのキー（x:123 など）を集める。exclude のファイル名は数えない */
+/** 公開済みのダイジェスト記事のキーを集める。下書きと exclude のファイル名は数えない */
 export function loadUsedKeys(dir, { exclude = [] } = {}) {
   const used = new Set()
   if (!fs.existsSync(dir)) return used
   for (const f of fs.readdirSync(dir).filter((f) => f.endsWith(".md") && !exclude.includes(f))) {
     const text = fs.readFileSync(path.join(dir, f), "utf8")
+    if (isDraftArticle(text)) continue
     for (const m of text.matchAll(ITEM_RE)) used.add(`${m[1]}:${m[2]}`)
   }
   return used
 }
 
-/** 記事ファイルごとの掲載キー一覧と、キー → 項目の最初のリンク先（はてなの記事など、キーから URL を戻せない項目の確認用） */
+/** 前日の記事から項目キーを読む。下書きも含め、日をまたいで同じ項目を繰り返さない */
+export function loadArticleKeys(file) {
+  if (!fs.existsSync(file)) return new Set()
+  const text = fs.readFileSync(file, "utf8")
+  return new Set([...text.matchAll(ITEM_RE)].map((m) => `${m[1]}:${m[2]}`))
+}
+
+/** 公開済みの記事ごとの掲載キー一覧と、キー → 項目の最初のリンク先。下書きは削除確認の対象外 */
 export function listItemsByFile(dir) {
   if (!fs.existsSync(dir)) return []
   return fs
@@ -287,11 +305,13 @@ export function listItemsByFile(dir) {
     .map((f) => {
       const file = path.join(dir, f)
       const text = fs.readFileSync(file, "utf8")
+      if (isDraftArticle(text)) return null
       const blocks = [...text.matchAll(ITEM_RE)]
       const keys = blocks.map((m) => `${m[1]}:${m[2]}`)
       const urls = new Map(blocks.map((m) => [`${m[1]}:${m[2]}`, m[0].match(/href="([^"]+)"/)?.[1]?.replace(/&amp;/g, "&")]))
       return { file, keys, urls }
     })
+    .filter(Boolean)
 }
 
 /** 記事から指定キーの項目ブロックを削除する。削除した件数を返す */

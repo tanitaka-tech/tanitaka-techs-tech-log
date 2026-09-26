@@ -6,6 +6,17 @@ export function velocity(engagement, publishedAt, now = new Date()) {
   return engagement / hours
 }
 
+/** イラスト候補では、キャラクター・二次創作の手掛かりがある投稿を少し上にする */
+export function boostCharacterIllustration(candidate, genre) {
+  const weight = Number(genre?.characterWeight ?? 1)
+  const pattern = genre?.characterPattern
+  if (!(weight > 1) || !pattern) return candidate
+  if (new RegExp(pattern, "iu").test(`${candidate.title ?? ""}\n${candidate.text ?? ""}`)) {
+    return { ...candidate, score: candidate.score * weight }
+  }
+  return candidate
+}
+
 export function xEngagement(m) {
   return (
     m.like_count +

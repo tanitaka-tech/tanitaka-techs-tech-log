@@ -5,7 +5,8 @@
  * 既定はプレビュー用: 候補を上限で削らずにすべて載せ、項目ごとの注意（note）と警告の一覧を記事に表示する。
  * 人間はプレビューで項目ごとの採用トグル（pnpm dev のときだけ出る）を切り替えて、載せる項目を決める。
  * 採用・不採用は selection.json の各項目の adopt に保存される（false が不採用、それ以外は採用）。
- * --final（publish が自動で使う）では、採用の項目だけを警告なしで載せ、上限を超えていればエラーにする。
+ * --final では、採用の項目だけを警告なしで載せ、上限を超えていればエラーにする。下書きのまま保存する。
+ * publish が呼ぶときだけ draft: false にして公開する。
  */
 import { spawnSync } from "node:child_process"
 import fs from "node:fs"
@@ -13,12 +14,13 @@ import { readJson } from "../lib/context.mjs"
 import { renderArticle } from "../lib/render.mjs"
 import { resolveKey, runReview } from "../lib/review.mjs"
 
-/** 公開済み（develop にコミット済み）の記事を誤って上書きしないよう、git で追跡中か調べる */
+/** コミット済みの記事を誤って上書きしないよう、git で追跡中か調べる（下書きも含む） */
 function isTracked(file) {
   return spawnSync("git", ["ls-files", "--error-unmatch", file], { stdio: "ignore" }).status === 0
 }
 
-export function render(ctx, { force = false, final = false } = {}) {
+export function render(ctx, { force = false, final = false, draft = true } = {}) {
+  if (!draft && !final) throw new Error("公開する記事は final を指定してください")
   const { config, date, articlePath, categoryLimit } = ctx
   if (isTracked(articlePath) && !force) {
     throw new Error(`${articlePath} はコミット済みです。上書きするときは --force を付けてください`)
@@ -109,6 +111,7 @@ export function render(ctx, { force = false, final = false } = {}) {
       ]
   const article = renderArticle({
     date,
+    draft,
     selection: { topic, topicKey, description: raw.description ?? "", items },
     review: reviewWarnings,
     categoryLimit,
@@ -123,7 +126,7 @@ export function render(ctx, { force = false, final = false } = {}) {
   fs.mkdirSync(config.article.dir, { recursive: true })
   fs.writeFileSync(articlePath, article)
 
-  console.log(`${articlePath} を書き出しました${final ? "（公開用）" : "（プレビュー用。警告を記事に表示しています）"}: ${topic} ${date}`)
+  console.log(`${articlePath} を書き出しました${draft ? "（下書き）" : "（公開用）"}${final ? "" : "（プレビュー用。警告を記事に表示しています）"}: ${topic} ${date}`)
   for (const [label, n] of perCategory) console.log(`  ${label}: ${n}件`)
   for (const i of items.filter((i) => i.note)) console.log(`  ⚠️ ${noteLine(i)}`)
   for (const w of [...warnings, ...overLimit]) console.log(`  ⚠️ ${w}`)
