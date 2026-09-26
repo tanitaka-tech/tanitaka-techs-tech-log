@@ -23,7 +23,6 @@ export async function searchSections(config, now, genreIds = null) {
           body: JSON.stringify({
             model: settings.model ?? "gpt-5.6-sol",
             tools: [{ type: "web_search", search_context_size: "medium" }],
-            text: { format: { type: "json_object" } },
             input: `日本語のデイリーダイジェスト「${label}」向けに、${now.toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo" })}に確認できる直近24時間の新しい話題をウェブ検索してください。検索単位 ${i + 1}/${amount}。既出の定番情報ではなく新着を優先し、記事・作品など読者が元ページを確認できる情報を最大${settings.maxResults ?? 4}件選びます。JSONオブジェクトのみ: {"items":[{"title":"タイトル","url":"https://...","summary":"内容の短い日本語要約"}]}。urlは検索結果の引用URLと完全一致させてください。検索語の重点: ${section.query}`,
           }),
         })
@@ -51,6 +50,9 @@ export async function searchSections(config, now, genreIds = null) {
         console.log(`[ai-search] ${label} ${i + 1}/${amount}: ${results.length}件`)
       } catch (error) {
         console.error(`[ai-search] ${label} ${i + 1}/${amount} 失敗: ${error.message}`)
+        if (/credit_balance_exhausted|insufficient_quota/.test(error.message)) {
+          throw new Error("OpenAI API の残クレジットがありません。残高を追加してから再実行してください")
+        }
       }
     }
   }
