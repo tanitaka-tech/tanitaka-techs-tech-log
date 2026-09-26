@@ -30,7 +30,7 @@ const HELP = `使い方: pnpm digest <コマンド> [--date YYYY-MM-DD]
   review    curation.yaml を適用した候補一覧を番号付きで表示する（--all で除外・圏外も）
   curate    ルールを足す・消す（例: curate block author:#3 --reason 懸賞アカウント。prune で期限切れのルールを消す）
   select    候補一覧から selection.json の下書きを作る（--draft。あれば足りない候補を足す、--reset で作り直し）。--llm は API の LLM で選ぶ
-  render    selection.json から記事を書き出す（既定はプレビュー用で警告を表示。--final で公開用）
+  render    selection.json から下書きを書き出す（既定は警告を表示。--final で採用項目だけに整えるが未公開のまま）
   publish   記事と curation.yaml をコミットし、PR を作って CI が通ったらマージする
   stats     直近の選定からジャンルごとの採用率を出し、ルールにしてよさそうなものを提案する（--days で日数）`
 
