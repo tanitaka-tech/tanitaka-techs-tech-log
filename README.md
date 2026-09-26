@@ -70,7 +70,7 @@ cp .env.example .env   # X_BEARER_TOKEN / YOUTUBE_API_KEY を記入
 
 Claude Code で `/digest` を実行すると、次の順に進みます。
 
-1. **収集**: 実行時点から24時間以内の投稿・動画（`config.yaml` の `collect.windowHours`）を集めて `.digest-cache/<date>/` に保存する。`<date>` は記事の日付（実行日）。X は従量課金なので、保存済みなら取り直さない。`aiSearch.sections` でセクションごとのウェブ追加検索回数を調整できる（OpenAI API が必要）。前日の収集候補と、過去の記事に載せたものは自動で候補一覧から外れる
+1. **収集**: 実行時点から24時間以内の投稿・動画（`config.yaml` の `collect.windowHours`）を集めて `.digest-cache/<date>/` に保存する。`<date>` は記事の日付（実行日）。X は従量課金なので、保存済みなら取り直さない。`aiSearch.sections` でエージェントによるセクションごとのウェブ追加検索数を調整できる。検索結果は `pnpm digest import-ai-search --date <date> --input <file>` で候補に追加する。前日の収集候補と、過去の記事に載せたものは自動で候補一覧から外れる
 2. **確認**: `curation.yaml` を適用した候補を番号付きで見せる。Claude がおすすめ（✅）と気になる点（⚠️）を付けるが、除外はしない
 3. **重みづけ**: 「#3 の人ブロック」「VTuber 少し強めに」「#9 は推し」などと指示すると、`curation.yaml` にルールが追加される。「今回だけ外して」は選定だけを直す
 4. **選定・添削**: 選んだ項目とタイトル・説明を `selection.json` に書いて記事を生成し、`pnpm dev` でプレビューする。タイトルや項目の直しも会話で指示する

@@ -25,7 +25,7 @@ pnpm -s digest collect --date <date>
 - `--force` で取り直すのは、ユーザーが明示的に頼んだときだけ。
 - 同じ日に2回目を実行しても、保存済みの候補（1回目の実行から24時間分）を使う。最新の24時間で取り直したいときは `--force`。
 - 前日の `.digest-cache/<前日>/candidates.json` にある項目は、記事に載ったかどうかにかかわらず候補一覧から外れる。過去の記事に掲載済みの項目も同様に外れる。
-- `config.yaml` の `aiSearch.sections.<セクション>.searches` は OpenAI のウェブ追加検索回数（0〜5）。不要なセクションは0にする。`OPENAI_API_KEY` がない場合は追加検索を飛ばす。
+- `config.yaml` の `aiSearch.sections.<セクション>.searches` を読み、各セクションで指定回数ぶん自分のウェブ検索ツールを使って候補を補強する。設定した `query` を検索語の軸にし、収集期間内の一次情報や新着記事を優先する。元ページURLと短い要約を `{section,title,url,summary}` の配列にして一時JSONへ保存し、`pnpm -s digest import-ai-search --date <date> --input <file>` で候補に追加する。イントロクイズは追加しない。
 
 ## 2. 全部入りのプレビューを作る
 

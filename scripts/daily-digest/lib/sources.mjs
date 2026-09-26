@@ -11,7 +11,7 @@ const fmt = (n) => Number(n ?? 0).toLocaleString("ja-JP")
 const sharers = (m) => (m.sharers ? ` 🔗${m.sharers}人` : "")
 
 export const SOURCES = [
-  { id: "web", name: "AI検索" },
+  { id: "web", name: "AI検索", metrics: () => "" },
   { id: "hatena", name: "はてなブックマーク", metrics: ({ metrics: m }) => `🔖${fmt(m.bookmarks)}users` },
   { id: "bluesky", name: "Bluesky", social: true, metrics: ({ metrics: m }) => `♥${fmt(m.likes)} RP${fmt(m.reposts)}` },
   {

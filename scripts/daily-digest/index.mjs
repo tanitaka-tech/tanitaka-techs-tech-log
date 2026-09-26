@@ -15,6 +15,7 @@
  */
 import { parseArgs } from "node:util"
 import { collect } from "./commands/collect.mjs"
+import { importAiSearch } from "./commands/import-ai-search.mjs"
 import { curate } from "./commands/curate.mjs"
 import { publish } from "./commands/publish.mjs"
 import { render } from "./commands/render.mjs"
@@ -27,6 +28,7 @@ import { loadDotEnv } from "./lib/env.mjs"
 const HELP = `使い方: pnpm digest <コマンド> [--date YYYY-MM-DD]
 
   collect   候補を集めて保存する（保存済みなら取り直さない。--force で取り直し、--genre a,b でそのジャンルだけ取り直し）
+  import-ai-search   エージェントが検索した補助候補を追加する（--input results.json）
   review    curation.yaml を適用した候補一覧を番号付きで表示する（--all で除外・圏外も）
   curate    ルールを足す・消す（例: curate block author:#3 --reason 懸賞アカウント。prune で期限切れのルールを消す）
   select    候補一覧から selection.json の下書きを作る（--draft。あれば足りない候補を足す、--reset で作り直し）。--llm は API の LLM で選ぶ
@@ -39,6 +41,7 @@ const OPTIONS = {
   // collect
   force: { type: "boolean", default: false },
   fixture: { type: "string" },
+  input: { type: "string" },
   "x-limit": { type: "string" },
   // review
   all: { type: "boolean", default: false },
@@ -75,6 +78,8 @@ async function main() {
   switch (command) {
     case "collect":
       return collect(ctx, { force: opts.force, fixture: opts.fixture, genre: opts.genre })
+    case "import-ai-search":
+      return importAiSearch(ctx, opts.input)
     case "review":
       return review(ctx, { all: opts.all })
     case "curate":
