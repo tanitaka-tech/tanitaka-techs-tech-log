@@ -1,5 +1,6 @@
 import { countDrop, filterWithReasons } from "./drops.mjs"
 import { velocity, youtubeEngagement } from "./score.mjs"
+import { politeFetch } from "./http.mjs"
 
 const API = "https://www.googleapis.com/youtube/v3"
 
@@ -8,7 +9,7 @@ async function ytGet(path, params, key) {
   for (const [k, v] of Object.entries({ ...params, key })) {
     if (v !== undefined && v !== "") url.searchParams.set(k, String(v))
   }
-  const res = await fetch(url)
+  const res = await politeFetch(url)
   const body = await res.json().catch(() => ({}))
   if (!res.ok) {
     // エラーメッセージにキーが含まれないよう、URLは出さない
@@ -56,10 +57,7 @@ export function durationSeconds(v) {
  * （ショートならそのまま 200、通常の動画なら /watch へリダイレクトされる）
  */
 async function isShort(id) {
-  const res = await fetch(`https://www.youtube.com/shorts/${id}`, {
-    redirect: "manual",
-    headers: { "User-Agent": "Mozilla/5.0" },
-  })
+  const res = await politeFetch(`https://www.youtube.com/shorts/${id}`, { redirect: "manual" })
   await res.body?.cancel()
   return res.status === 200
 }

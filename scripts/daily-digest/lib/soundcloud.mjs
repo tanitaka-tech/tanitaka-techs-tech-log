@@ -13,11 +13,10 @@ import { hoursBetween } from "./date.mjs"
 import { filterWithReasons } from "./drops.mjs"
 import { velocity } from "./score.mjs"
 import { KANA_RE } from "./youtube.mjs"
+import { politeFetch } from "./http.mjs"
 
 const HOST = "https://soundcloud.com"
 const API = "https://api-v2.soundcloud.com"
-// ブラウザ以外の User-Agent だとページの中身が変わることがあるので、ブラウザを名乗る
-const HEADERS = { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko)" }
 
 /** ページの HTML から hydration の JSON（配列）を取り出す。見つからなければ null */
 export function parseHydration(html) {
@@ -34,7 +33,7 @@ let clientId
 /** api-v2 の client_id。トップページの hydration（apiClient）から読み、実行中は使い回す */
 async function getClientId() {
   if (clientId) return clientId
-  const res = await fetch(HOST, { headers: HEADERS })
+  const res = await politeFetch(HOST)
   if (!res.ok) throw new Error(`SoundCloud ${res.status} トップページ`)
   const id = parseHydration(await res.text())?.find((d) => d.hydratable === "apiClient")?.data?.id
   if (!id) throw new Error("SoundCloud の client_id が見つかりません（ページの作りが変わった可能性があります）")
@@ -50,7 +49,7 @@ async function searchTracks(params, pages) {
   const tracks = []
   for (let i = 0; i < pages && url; i++) {
     url.searchParams.set("client_id", id)
-    const res = await fetch(url, { headers: HEADERS })
+    const res = await politeFetch(url)
     if (!res.ok) throw new Error(`SoundCloud API ${res.status} /search/tracks`)
     const body = await res.json()
     tracks.push(...(body.collection ?? []))
@@ -169,16 +168,26 @@ export async function searchSoundcloudGenre(genre, now = new Date(), drops = {})
   return tracks.map((t) => toSoundcloudCandidate(t, genre, now))
 }
 
-/** 削除・非公開になった曲の ID を返す。oEmbed は曲 ID の URL を受け付け、見られない曲には 404 を返す */
+/**
+ * 削除・非公開・埋め込み不可になった曲の ID を返す。api-v2 の /tracks?ids=（50曲ずつ）は、見られない曲を結果に含めない。
+ * （soundcloud.com/oembed は robots.txt で ? 付きの URL が禁止されているので使わない）
+ */
 export async function findUnavailableTracks(ids) {
+  const id = await getClientId()
   const unavailable = []
-  for (const id of ids) {
-    const url = new URL(`${HOST}/oembed`)
-    url.searchParams.set("format", "json")
-    url.searchParams.set("url", `https://api.soundcloud.com/tracks/${id}`)
-    const res = await fetch(url, { headers: HEADERS })
-    if (res.status === 404 || res.status === 403) unavailable.push(id)
-    else if (!res.ok) throw new Error(`SoundCloud oEmbed ${res.status} tracks/${id}`)
+  for (let i = 0; i < ids.length; i += 50) {
+    const chunk = ids.slice(i, i + 50)
+    const url = new URL(`${API}/tracks`)
+    url.searchParams.set("ids", chunk.join(","))
+    url.searchParams.set("client_id", id)
+    const res = await politeFetch(url)
+    if (!res.ok) throw new Error(`SoundCloud API ${res.status} /tracks`)
+    const ok = new Set(
+      (await res.json())
+        .filter((t) => t.sharing === "public" && t.embeddable_by === "all" && t.policy !== "BLOCK")
+        .map((t) => String(t.id)),
+    )
+    for (const tid of chunk) if (!ok.has(String(tid))) unavailable.push(tid)
   }
   return unavailable
 }

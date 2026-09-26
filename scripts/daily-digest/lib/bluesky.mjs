@@ -6,16 +6,16 @@
 import { hoursBetween } from "./date.mjs"
 import { filterWithReasons } from "./drops.mjs"
 import { velocity } from "./score.mjs"
+import { politeFetch } from "./http.mjs"
 
 const API = "https://api.bsky.app/xrpc"
-const HEADERS = { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko)" }
 // 性的・暴力的な内容に付くラベル。投稿か投稿者に付いていれば除く
 const SENSITIVE_LABELS = new Set(["porn", "sexual", "nudity", "graphic-media", "gore", "!warn"])
 
 async function bskyGet(path, params) {
   const url = new URL(`${API}/${path}`)
   for (const [k, v] of Object.entries(params)) if (v !== undefined) url.searchParams.set(k, String(v))
-  const res = await fetch(url, { headers: HEADERS })
+  const res = await politeFetch(url)
   const body = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(`Bluesky API ${res.status} ${path}: ${body.message ?? ""}`)
   return body
@@ -106,7 +106,7 @@ export async function findUnavailableBlueskyPosts(ids) {
     })
     const url = new URL(`${API}/app.bsky.feed.getPosts`)
     for (const u of uris) url.searchParams.append("uris", u)
-    const res = await fetch(url, { headers: HEADERS })
+    const res = await politeFetch(url)
     if (!res.ok) throw new Error(`Bluesky API ${res.status} getPosts`)
     const found = new Set(((await res.json()).posts ?? []).map((p) => blueskyId(p.uri)))
     for (const id of chunk) if (!found.has(id)) missing.push(id)

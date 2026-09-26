@@ -8,17 +8,16 @@
 import { hoursBetween } from "./date.mjs"
 import { filterWithReasons } from "./drops.mjs"
 import { velocity } from "./score.mjs"
+import { politeFetch } from "./http.mjs"
 
-const HEADERS = {
-  "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140 Safari/537.36",
-  Referer: "https://www.pixiv.net/",
-}
+// ランキングの JSON と作品情報は、pixiv のページからの読み込みとして Referer を付けないと読めない
+const HEADERS = { Referer: "https://www.pixiv.net/" }
 
 /** ランキング（mode: daily / rookie / original など）を pages ページ（1ページ50件）まで読む */
 async function fetchRanking(mode, pages) {
   const works = []
   for (let p = 1; p <= pages; p++) {
-    const res = await fetch(`https://www.pixiv.net/ranking.php?mode=${mode}&content=illust&format=json&p=${p}`, { headers: HEADERS })
+    const res = await politeFetch(`https://www.pixiv.net/ranking.php?mode=${mode}&content=illust&format=json&p=${p}`, { headers: HEADERS })
     // 最後のページの次は 404 になる
     if (res.status === 404) break
     if (!res.ok) throw new Error(`pixiv ランキング ${res.status} ${mode}`)
@@ -80,7 +79,7 @@ export async function searchPixivGenre(genre, now = new Date(), drops = {}) {
 export async function findUnavailableWorks(ids) {
   const missing = []
   for (const id of ids) {
-    const res = await fetch(`https://www.pixiv.net/ajax/illust/${id}`, { headers: HEADERS })
+    const res = await politeFetch(`https://www.pixiv.net/ajax/illust/${id}`, { headers: HEADERS })
     if (res.status === 404) missing.push(id)
     else if (!res.ok) throw new Error(`pixiv ${res.status} ajax/illust/${id}`)
   }

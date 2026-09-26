@@ -1,10 +1,12 @@
+import { politeFetch } from "./http.mjs"
+
 /**
  * Steam ストアの「スペシャル（セール中）」から割引率の高いものを候補にする。
  * セールには開始日時がないため、過去のダイジェストで紹介済みのものは呼び出し側で除外する。
  */
 export async function fetchSteamSales(genre, config) {
   const sc = config.steam
-  const res = await fetch(
+  const res = await politeFetch(
     "https://store.steampowered.com/api/featuredcategories?cc=jp&l=japanese",
   )
   if (!res.ok) throw new Error(`Steam API ${res.status}`)
@@ -65,7 +67,7 @@ async function searchNewReleases(since, pages) {
   const apps = []
   for (let page = 0; page < pages; page++) {
     const url = `https://store.steampowered.com/search/results/?query&start=${page * 100}&count=100&sort_by=Released_DESC&category1=998&infinite=1&cc=jp&l=japanese`
-    const res = await fetch(url)
+    const res = await politeFetch(url)
     if (!res.ok) throw new Error(`Steam 検索 ${res.status}`)
     const found = parseSearchResults((await res.json()).results_html ?? "")
     apps.push(...found.filter((a) => a.released && a.released >= since))
@@ -81,7 +83,7 @@ async function currentPlayers(ids) {
   for (let i = 0; i < ids.length; i += 10) {
     await Promise.all(
       ids.slice(i, i + 10).map(async (id) => {
-        const res = await fetch(`https://api.steampowered.com/ISteamUserStats/GetNumberOfCurrentPlayers/v1/?appid=${id}`)
+        const res = await politeFetch(`https://api.steampowered.com/ISteamUserStats/GetNumberOfCurrentPlayers/v1/?appid=${id}`)
         // 未発売・統計なしのゲームは 404 になる
         players.set(id, res.ok ? ((await res.json()).response?.player_count ?? 0) : 0)
       }),
@@ -91,7 +93,7 @@ async function currentPlayers(ids) {
 }
 
 async function appDetails(id) {
-  const res = await fetch(`https://store.steampowered.com/api/appdetails?appids=${id}&cc=jp&l=japanese`)
+  const res = await politeFetch(`https://store.steampowered.com/api/appdetails?appids=${id}&cc=jp&l=japanese`)
   if (!res.ok) return null
   return (await res.json())[id]?.data ?? null
 }
@@ -149,7 +151,7 @@ export async function fetchSteamNewReleases(genre, now = new Date(), drops = {})
 export async function findUnavailableApps(ids) {
   const missing = []
   const exists = async (api, param, id) => {
-    const res = await fetch(`https://store.steampowered.com/api/${api}?${param}=${id}&cc=jp&filters=basic`)
+    const res = await politeFetch(`https://store.steampowered.com/api/${api}?${param}=${id}&cc=jp&filters=basic`)
     if (!res.ok) throw new Error(`Steam ${res.status} ${api} ${id}`)
     // 別のアプリ ID に引き継がれたゲームは、キーが指定した ID と違うことがある
     return Object.values((await res.json()) ?? {}).some((v) => v?.success)
