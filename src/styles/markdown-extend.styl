@@ -500,6 +500,17 @@
     p, ul
       margin: 0.25rem 0
 
+    .digest-review-reload
+      margin-top: 0.5rem
+      padding: 0.35rem 0.75rem
+      border: 1px solid currentColor
+      border-radius: 0.375rem
+      cursor: pointer
+
+      &:disabled
+        cursor: wait
+        opacity: 0.6
+
   .digest-entry:has(.digest-review-note), .digest-entry:has(.digest-review-tools)
     flex-direction: column
     align-items: center

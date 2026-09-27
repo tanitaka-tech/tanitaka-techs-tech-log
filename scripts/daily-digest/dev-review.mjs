@@ -21,6 +21,12 @@ import fs from "node:fs"
 import path from "node:path"
 import { addRule, authorKey, describeRule, loadCuration, removeRules, saveCuration } from "./lib/curation.mjs"
 import { todayJst } from "./lib/date.mjs"
+import { loadContext, writeJson as writeDigestJson } from "./lib/context.mjs"
+import { collect } from "./commands/collect.mjs"
+import { runReview, resolveKey } from "./lib/review.mjs"
+import { draftSelection } from "./lib/draft.mjs"
+import { render } from "./commands/render.mjs"
+import { loadDotEnv } from "./lib/env.mjs"
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
@@ -64,6 +70,8 @@ export function digestReview() {
     name: "digest-review",
     hooks: {
       "astro:server:setup": ({ server }) => {
+        // CLI 以外（プレビュー画面からのリロード）も収集コマンドを呼ぶため、ここでも .env を読む。
+        loadDotEnv()
         server.middlewares.use(async (req, res, next) => {
           const url = new URL(req.url ?? "/", "http://localhost")
           if (!url.pathname.startsWith("/__digest/")) return next()
@@ -92,6 +100,67 @@ export function digestReview() {
               item.adopt = adopt
               fs.writeFileSync(file, `${JSON.stringify(selection, null, 2)}\n`)
               return send(res, 200, { key, adopt })
+            }
+            if (req.method === "POST" && url.pathname === "/__digest/reload") {
+              const { date, states = [] } = JSON.parse(await readBody(req))
+              if (!DATE_RE.test(date ?? "")) return send(res, 400, { error: "date が不正です" })
+              if (!Array.isArray(states) || states.some((s) => typeof s?.key !== "string" || typeof s?.adopt !== "boolean")) {
+                return send(res, 400, { error: "states は key と adopt を持つ配列にしてください" })
+              }
+              const ctx = loadContext({ date })
+              if (date !== todayJst(ctx.now)) return send(res, 400, { error: "候補の再収集は今日の日付だけ実行できます" })
+              const oldSelection = readJson(ctx.paths.selection, null)
+              if (!oldSelection) return send(res, 404, { error: "選定データがありません" })
+              const oldCandidates = readJson(ctx.paths.candidates, [])
+              const oldByKey = new Map(oldCandidates.map((c) => [c.key, c]))
+              const numbers = readJson(ctx.paths.numbers, {})
+              const resolve = (key) => {
+                try { return resolveKey(key, numbers) } catch { return key }
+              }
+              // リロードボタンと採用トグルがほぼ同時に押されても、画面に表示された最新状態を優先する。
+              for (const state of states) {
+                const item = (oldSelection.items ?? []).find((entry) => resolve(entry.key) === state.key)
+                if (item) item.adopt = state.adopt
+              }
+              const rejected = (oldSelection.items ?? []).filter((item) => item.adopt === false)
+              const accepted = (oldSelection.items ?? []).filter((item) => item.adopt !== false)
+              const { doc, rules } = loadCuration()
+              const blockedKeys = new Set(rules.filter((r) => r.action === "block").map((r) => r.match?.key).filter(Boolean))
+              for (const item of rejected) {
+                const key = resolve(item.key)
+                if (oldByKey.has(key) && !blockedKeys.has(key)) {
+                  addRule(doc, { match: { key }, action: "block", reason: "ダイジェスト候補のリロード時に不採用", added: todayJst(ctx.now) })
+                  blockedKeys.add(key)
+                }
+              }
+              saveCuration(doc)
+              await collect(ctx, { force: true })
+              const fresh = readJson(ctx.paths.candidates, [])
+              const freshKeys = new Set(fresh.map((c) => c.key))
+              for (const item of accepted) {
+                const key = resolve(item.key)
+                const candidate = oldByKey.get(key)
+                if (candidate && !freshKeys.has(key)) fresh.push(candidate)
+              }
+              writeDigestJson(ctx.paths.candidates, fresh)
+              const { numbers: nextNumbers } = runReview(ctx)
+              const shortlist = readJson(ctx.paths.shortlist, [])
+              const previous = {
+                ...oldSelection,
+                // 採用済み項目は再収集後に順位が落ちても選定から外さない。
+                items: accepted,
+              }
+              const { selection } = draftSelection(shortlist, {
+                maxItems: ctx.config.article.maxItems,
+                categoryLimit: ctx.categoryLimit,
+                previous,
+                resolve: (key) => {
+                  try { return resolveKey(key, nextNumbers) } catch { return key }
+                },
+              })
+              writeDigestJson(ctx.paths.selection, selection)
+              render(ctx, { force: true })
+              return send(res, 200, { rejected: rejected.length, candidates: fresh.length, shortlisted: shortlist.length })
             }
             if (req.method === "POST" && url.pathname === "/__digest/thumbnail") {
               const { date, key } = JSON.parse(await readBody(req))

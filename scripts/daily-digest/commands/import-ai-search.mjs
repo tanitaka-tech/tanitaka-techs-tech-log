@@ -18,17 +18,35 @@ export function importAiSearch(ctx, input) {
     if (!genre) throw new Error(`aiSearch.sections にセクションまたは保存先ジャンルがありません: ${entry.section}`)
     const url = new URL(entry.url)
     if (url.protocol !== "https:") throw new Error(`HTTPS以外のURLは取り込めません: ${entry.url}`)
+    if (section.socialOnly) {
+      const allowed = section.allowedDomains ?? []
+      if (!allowed.some((domain) => url.hostname === domain || url.hostname.endsWith(`.${domain}`))) {
+        throw new Error(`SNS以外のURLは「${entry.section}」に取り込めません: ${entry.url}`)
+      }
+      const postPath = url.pathname
+      const isPost = (url.hostname === "x.com" || url.hostname === "twitter.com")
+        ? /^\/[^/]+\/status\/\d+/.test(postPath)
+        : url.hostname === "bsky.app"
+          ? /^\/profile\/[^/]+\/post\/[^/]+/.test(postPath)
+          : (url.hostname === "pixiv.net" || url.hostname.endsWith(".pixiv.net"))
+            ? /^\/artworks\/\d+/.test(postPath)
+            : /^\/notes\/[^/]+/.test(postPath)
+      if (!isPost) throw new Error(`SNSの個別投稿URLではありません: ${entry.url}`)
+    }
     const title = String(entry.title ?? "").trim()
     const summary = String(entry.summary ?? "").trim()
     if (!title || !summary) throw new Error(`タイトル・要約がありません: ${entry.url}`)
     if (/イントロ.?クイズ|アニソン.*クイズ|アニメ.*クイズ|クイズ.*アニメ/i.test(`${title} ${summary}`)) continue
+    const likes = Number.isFinite(Number(entry.likes)) ? Math.max(0, Number(entry.likes)) : 0
+    const reposts = Number.isFinite(Number(entry.reposts)) ? Math.max(0, Number(entry.reposts)) : 0
     const normalizedUrl = url.href
     const id = createHash("sha256").update(normalizedUrl).digest("hex").slice(0, 20)
     items.push({
       key: `web:${id}`, source: "web", id, genre: genre.id, genreLabel: genre.label,
       title: title.slice(0, 180), text: summary.slice(0, 700), url: normalizedUrl,
       author: { id: url.hostname, name: url.hostname, handle: url.hostname },
-      publishedAt: ctx.now.toISOString(), score: 10, metrics: {},
+      publishedAt: ctx.now.toISOString(), score: 10 + Math.log1p(likes) + Math.log1p(reposts) * 1.2,
+      metrics: { likes, reposts },
     })
   }
   const existing = readJson(ctx.paths.candidates)

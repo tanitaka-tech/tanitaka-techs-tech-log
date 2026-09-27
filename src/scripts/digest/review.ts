@@ -67,11 +67,41 @@ export async function setupDigestReview() {
 			throw new Error(
 				(await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`,
 			);
+		return res.json().catch(() => ({})) as Promise<Record<string, number>>;
 	};
 	const fail = (what: string, e: unknown) => {
 		status.textContent = `${what}を保存できませんでした（pnpm dev で開いていますか？）: ${e instanceof Error ? e.message : e}`;
 	};
 	banner.append(createMetaEditor(saved, post, status, fail));
+	const reload = document.createElement("button");
+	reload.type = "button";
+	reload.className = "digest-review-reload";
+	reload.textContent = "候補をリロード（不採用は今後除外）";
+	reload.addEventListener("click", async () => {
+		if (
+			!window.confirm(
+				"不採用の候補を今後の検索結果から除外し、今日の候補を再収集します。採用中の項目はできるだけ維持します。よろしいですか？",
+			)
+		)
+			return;
+		reload.disabled = true;
+		status.textContent = "不採用を記録して候補を再収集中です…";
+		try {
+			const states = [
+				...document.querySelectorAll<HTMLElement>(".digest-entry[data-key]"),
+			].map((entry) => ({
+				key: entry.dataset.key ?? "",
+				adopt: entry.dataset.adopt !== "false",
+			}));
+			const result = await post("/__digest/reload", { states });
+			status.textContent = `候補を更新しました（除外 ${result.rejected ?? 0}件 / 候補 ${result.candidates ?? 0}件）。画面を更新します…`;
+			window.location.reload();
+		} catch (err) {
+			reload.disabled = false;
+			fail("候補のリロード", err);
+		}
+	});
+	banner.append(reload);
 
 	for (const panel of document.querySelectorAll<HTMLElement>(
 		".digest-items[data-limit]",
@@ -350,7 +380,7 @@ function createRuleMenu(
 /** バナーに出す、記事のタイトル（の前半）と説明の入力欄 */
 function createMetaEditor(
 	saved: { topic?: string; description?: string },
-	post: (path: string, body: object) => Promise<void>,
+	post: (path: string, body: object) => Promise<Record<string, number>>,
 	status: HTMLElement,
 	fail: (what: string, e: unknown) => void,
 ) {
