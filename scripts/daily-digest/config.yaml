@@ -34,16 +34,16 @@ collect:
 # genre は検索候補の保存先となる既存ジャンル ID。
 aiSearch:
   enabled: true
-  maxResults: 4
+  maxResults: 10
   sections:
-    音楽・MV: { searches: 1, genre: mv, query: "日本の新曲 MV 音楽リリース" }
-    最新技術: { searches: 2, genre: hatena-ai, query: "AI 技術 ソフトウェア 開発ツール 新機能" }
-    表現の解説: { searches: 1, genre: hatena-expression, query: "デザイン イラスト 映像 表現技法 解説" }
-    最新ゲーム: { searches: 1, genre: hatena-games, query: "日本 ゲーム 新作 発表 アップデート" }
-    やる気が出る・元気になる: { searches: 1, genre: motivation, query: "日本 心温まる 努力 成功 クリエイター ストーリー" }
-    セール: { searches: 1, genre: sale-steam, query: "ゲーム ソフトウェア セール 開始" }
-    イラスト: { searches: 2, genre: pixiv-illust, query: "キャラクターイラスト ファンアート イラストレーター 新作" }
-    風景写真: { searches: 1, genre: bluesky-landscape, query: "日本 風景写真 撮影スポット 写真家" }
+    音楽・MV: { searches: 0, genre: mv, query: "日本の新曲 MV 音楽リリース" }
+    最新技術: { searches: 0, genre: hatena-ai, query: "AI 技術 ソフトウェア 開発ツール 新機能" }
+    表現の解説: { searches: 0, genre: hatena-expression, query: "デザイン イラスト 映像 表現技法 解説" }
+    最新ゲーム: { searches: 0, genre: hatena-games, query: "日本 ゲーム 新作 発表 アップデート" }
+    やる気が出る・元気になる: { searches: 0, genre: motivation, query: "日本 心温まる 努力 成功 クリエイター ストーリー" }
+    セール: { searches: 0, genre: sale-steam, query: "ゲーム ソフトウェア セール 開始" }
+    イラスト: { searches: 10, genre: pixiv-illust, socialOnly: true, allowedDomains: [x.com, twitter.com, bsky.app, pixiv.net, misskey.io], query: "人気 キャラクターイラスト ファンアート 投稿 いいね リポスト" }
+    風景写真: { searches: 0, genre: bluesky-landscape, query: "日本 風景写真 撮影スポット 写真家" }
 
 review:
   candidatesPerGenre: 10 # ジャンルごとに候補一覧に出す上位件数（pin した候補は別枠で必ず出る）
