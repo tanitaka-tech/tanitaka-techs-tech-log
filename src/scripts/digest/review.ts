@@ -128,10 +128,12 @@ export async function setupDigestReview() {
 		section?.querySelector(":scope > h2 .digest-count")?.after(counter);
 		const updateCount = () => {
 			const normal = entries.filter(
-				(e) => e.dataset.adopt !== "false" && e.dataset.origin !== "subscriptions",
+				(e) =>
+					e.dataset.adopt !== "false" && e.dataset.origin !== "subscriptions",
 			).length;
 			const subscribed = entries.filter(
-				(e) => e.dataset.adopt !== "false" && e.dataset.origin === "subscriptions",
+				(e) =>
+					e.dataset.adopt !== "false" && e.dataset.origin === "subscriptions",
 			).length;
 			counter.textContent = `通常 ${normal} / 上限 ${limit}${subscribed ? ` ・登録 ${subscribed}（別枠）` : ""}`;
 			counter.classList.toggle("over", normal > limit);
