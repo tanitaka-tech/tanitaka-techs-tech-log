@@ -119,8 +119,13 @@ YouTube を再生数順に検索するだけだと海外の大型コンテンツ
 - **X での共有者数**（`x-music`）: X で YouTube リンクを貼ったアカウントの数（重複なし）で並べる。フォロワーが `minFollowers`（500人）未満のアカウントは数えない。宣伝や bot のアカウントは `ignore-sharer` で数えないようにできる
 - **X リスト**（`x-list-music`）: 自分で作った公開リストのメンバーが貼った動画を拾う。`config.yaml` の `listId` にリストの ID（`x.com/i/lists/<ID>`）を入れると有効になり、以降はリストのメンバーを編集するだけで好みを調整できる
 - **SoundCloud**（`soundcloud`）: SoundCloud の検索から、ボカロ・J-POP・アニメなどのタグとキーワードで直近7日（`maxTrackAgeDays`）の曲を集め、いいね・リポスト・再生の伸び率で並べる。公式 API はアプリ登録に審査が要るので、soundcloud.com 自身が使う api-v2 を、トップページに埋め込まれた client_id（`__sc_hydration`）で呼ぶ（API キー・従量課金なし）。非公式なので、SoundCloud の作りが変わったら `scripts/daily-digest/lib/soundcloud.mjs` を直す。埋め込み不可の曲・Go+ 限定の曲は除く
+- **登録チャンネル**: `.digest-cache/google-oauth/` の認可済みアカウントをすべて使い、各チャンネルの日本時間で当日公開された動画を取得する。取得数・候補一覧・記事への採用数は通常の上限とは別枠。内容に合う既存セクションの最後に追加し、該当するセクションがない動画は除外する
+- **学習・講座**: 登録チャンネルの動画に加え、技術・制作の講座を YouTube 検索からも探す。長めの講座を残せるよう、通常の音楽動画とは別の再生時間上限を使う
 
-- **ショート・配信の除外**: ショート動画（`/shorts/<ID>` が開けるかで判定するので、`#shorts` タグがなくても分かる）と、15分（`youtube.maxDurationMinutes`）を超える動画（歌枠・雑談などの配信アーカイブ）は候補にしない
+- **ショート・配信の除外**: 通常の音楽動画検索では、ショート動画（`/shorts/<ID>` が開けるかで判定するので、`#shorts` タグがなくても分かる）と、15分（`youtube.maxDurationMinutes`）を超える動画（歌枠・雑談などの配信アーカイブ）は候補にしない。学習動画の検索は再生時間を120分まで許し、登録チャンネルの動画には長さの制限を設けない
+
+登録チャンネルを使う場合は Google Cloud で YouTube Data API v3 のデスクトップ用 OAuth クライアントを作り、認証情報を `.digest-cache/google-oauth/client_secret.json` に置く。`pnpm digest:auth-youtube` でブラウザから読み取り認可し、別アカウントも加えるときは `pnpm digest:auth-youtube --add --login-hint メールアドレス` を実行する。認証情報とトークンは Git 管理外の `.digest-cache/` に保存する。
+OAuth アプリの公開ステータスが「テスト中」の場合、認可は7日後に失効する。再認可するときは同じコマンドを実行する。
 
 ### プレビューで採用を決める
 

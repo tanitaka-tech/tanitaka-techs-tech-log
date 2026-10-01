@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import { draftSelection } from "../lib/draft.mjs"
+import { mockSelect } from "../lib/llm.mjs"
 
 let no = 0
 const c = (genreLabel, lane, score, extra = {}) => ({ no: ++no, key: `youtube:${no}`, source: "youtube", genreLabel, genre: lane, score, ...extra })
@@ -23,6 +24,15 @@ describe("draftSelection", () => {
     assert.deepEqual(adopted, [`#${list[1].no}`, `#${list[3].no}`])
   })
 
+  it("登録チャンネルはカテゴリと記事の上限を消費せず、通常候補の後に追加する", () => {
+    const list = [c("音楽", "a", 100), c("音楽", "subscribed-music", 2, { origin: "subscriptions" }), c("音楽", "subscribed-music", 1, { origin: "subscriptions" })]
+    const { selection } = draftSelection(list, { maxItems: 1, categoryLimit: () => 1 })
+    assert.deepEqual(selection.items.filter((i) => i.adopt).map((i) => i.key), list.map((v) => `#${v.no}`))
+    const previous = { topic: "既存", items: [{ key: list[0].key, note: "", adopt: true }] }
+    const updated = draftSelection(list, { maxItems: 1, categoryLimit: () => 1, previous })
+    assert.ok(updated.selection.items.slice(1).every((i) => i.adopt))
+  })
+
   it("保存済みの選定があれば、note・adopt・タイトルを残して、まだない候補を不採用で足す", () => {
     const list = [c("音楽", "a", 1), c("音楽", "a", 2)]
     const previous = { topic: "見出し", items: [{ key: list[0].key, note: "要確認", adopt: true }] }
@@ -34,4 +44,10 @@ describe("draftSelection", () => {
       { key: `#${list[1].no}`, note: "", adopt: false },
     ])
   })
+})
+
+it("mock 選定でも登録チャンネルは通常の件数上限に含めない", () => {
+  const list = [c("音楽", "a", 100), c("音楽", "subscribed-music", 2, { origin: "subscriptions" }), c("音楽", "subscribed-music", 1, { origin: "subscriptions" })]
+  const selection = mockSelect(list, { maxItems: 1, categoryLimit: () => 1 })
+  assert.deepEqual(selection.items.map((i) => i.key), list.map((v) => v.key))
 })

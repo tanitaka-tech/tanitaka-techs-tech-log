@@ -111,6 +111,30 @@ describe("掲載済みの項目の読み取りと削除", () => {
 })
 
 describe("render の公開状態", () => {
+  it("登録チャンネルを各セクションの最後に置き、通常枠の上限に数えない", (t) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "digest-subscribed-"))
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
+    const ctx = makeCtx({
+      genres: [
+        { id: "vocaloid", label: "音楽・MV", source: "youtube" },
+        { id: "subscribed-music", label: "音楽・MV", step: "登録チャンネル", source: "youtube-subscriptions" },
+      ],
+      maxItemsPerCategory: 1,
+    })
+    ctx.config.article.maxItems = 1
+    ctx.config.article.dir = path.join(dir, "posts")
+    ctx.articlePath = path.join(ctx.config.article.dir, `${ctx.date}.md`)
+    ctx.paths = Object.fromEntries(["candidates", "selection", "numbers", "shortlist", "collect"].map((name) => [name, path.join(dir, `${name}.json`)]))
+    const cs = [makeCandidate({ id: "normal" }), makeCandidate({ id: "sub1", genre: "subscribed-music", origin: "subscriptions" }), makeCandidate({ id: "sub2", genre: "subscribed-music", origin: "subscriptions" })]
+    fs.writeFileSync(ctx.paths.candidates, JSON.stringify(cs))
+    fs.writeFileSync(ctx.paths.selection, JSON.stringify({ topic: "上限の検証", items: cs.map((c) => ({ key: c.key, adopt: true })) }))
+    render(ctx, { final: true })
+    const md = fs.readFileSync(ctx.articlePath, "utf8")
+    assert.deepEqual([...md.matchAll(/<!-- digest-item (\S+) -->/g)].map((m) => m[1]), ["youtube:normal", "youtube:sub1", "youtube:sub2"])
+    render(ctx)
+    assert.equal((fs.readFileSync(ctx.articlePath, "utf8").match(/data-origin="subscriptions"/g) ?? []).length, 2)
+  })
+
   it("再生成・final 整形では下書きを維持し、公開時だけ採用項目を draft: false で出力する", (t) => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "digest-render-"))
     t.after(() => fs.rmSync(dir, { recursive: true, force: true }))

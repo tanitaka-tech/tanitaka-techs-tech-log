@@ -215,12 +215,13 @@ export async function selectAndWrite(candidates, { date, minItems, maxItems, max
 export function mockSelect(candidates, { maxItems, categoryLimit }) {
   const perGenre = new Map()
   const items = []
-  for (const c of [...candidates].sort((a, b) => b.score - a.score)) {
+  for (const c of candidates.filter((candidate) => candidate.origin !== "subscriptions").sort((a, b) => b.score - a.score)) {
     const n = perGenre.get(c.genreLabel) ?? 0
     if (n >= categoryLimit(c.genreLabel) || items.length >= maxItems) continue
     perGenre.set(c.genreLabel, n + 1)
     items.push({ key: c.key, note: "" })
   }
+  items.push(...candidates.filter((c) => c.origin === "subscriptions").map((c) => ({ key: c.key, note: "" })))
   return {
     topic: "（モック）今日の話題",
     topicKey: items[0]?.key ?? "",

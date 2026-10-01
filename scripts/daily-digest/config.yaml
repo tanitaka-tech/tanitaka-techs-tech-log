@@ -4,18 +4,20 @@
 
 article:
   minItems: 5 # これ未満しか採用できなければ記事を作らない
-  maxItems: 80 # 2026-09-26 にカテゴリの上限とあわせて2倍にした（Steam の新作・Bluesky の風景写真・pixiv を足したときに30→40）
-  maxItemsPerCategory: 8 # 同じカテゴリはカルーセルにまとめる。2026-09-26 に4から2倍にした
+  maxItems: 80 # 通常候補の上限。登録チャンネルは別枠
+  maxItemsPerCategory: 8 # 通常候補のカテゴリ上限。登録チャンネルは別枠
   # カテゴリごとに上限を変える場合（label: 件数）
   maxItemsByCategory:
     音楽・MV: 24
     最新技術: 16 # 最新AI技術とクリエイティブツールをまとめたので、その分多め
+    学習・講座: 8
     最新ゲーム: 12 # Steam の新作を足したので、その分多め
     イラスト: 16 # キャラクターイラストを増やす
   # 記事内でのカテゴリの表示順。genres の label をすべて並べる（抜けていると実行時にエラー）
   categoryOrder:
     - 音楽・MV
     - 最新技術
+    - 学習・講座
     - 表現の解説
     - 最新ゲーム
     - やる気が出る・元気になる # X のジャンル（motivation）だけなので、x.enabled が false の間は候補がない
@@ -38,6 +40,7 @@ aiSearch:
   sections:
     音楽・MV: { searches: 0, genre: mv, query: "日本の新曲 MV 音楽リリース" }
     最新技術: { searches: 0, genre: hatena-ai, query: "AI 技術 ソフトウェア 開発ツール 新機能" }
+    学習・講座: { searches: 0, genre: learning-tech, query: "プログラミング イラスト 制作 入門 講座 解説" }
     表現の解説: { searches: 0, genre: hatena-expression, query: "デザイン イラスト 映像 表現技法 解説" }
     最新ゲーム: { searches: 0, genre: hatena-games, query: "日本 ゲーム 新作 発表 アップデート" }
     やる気が出る・元気になる: { searches: 0, genre: motivation, query: "日本 心温まる 努力 成功 クリエイター ストーリー" }
@@ -46,7 +49,7 @@ aiSearch:
     風景写真: { searches: 0, genre: bluesky-landscape, query: "日本 風景写真 撮影スポット 写真家" }
 
 review:
-  candidatesPerGenre: 10 # ジャンルごとに候補一覧に出す上位件数（pin した候補は別枠で必ず出る）
+  candidatesPerGenre: 10 # 通常ジャンルの上位件数。登録チャンネルは全件、pin した候補も必ず出す
 
 # pnpm digest select --llm で API の LLM に選ばせるときだけ使う
 llm:
@@ -289,6 +292,31 @@ genres:
     # リミックスと、他人の曲の転載（「Not my track」「repost」など）も載せない
     exclude: "Suno|Udio|\\bAI\\b|ＡＩ|AI作曲|AI生成|生成AI|AIで作|#?ai ?music|#?aimusic|Generative|\\[(Verse|Chorus|Pre-Chorus|Intro|Outro|Bridge)|[Rr]emix|REMIX|bootleg|[Nn]ot my (track|song)|[Rr]e-?(post|upload)|just a repost|原曲|本家"
 
+  # 登録チャンネル以外からも、当日公開の役立つ講座を探す。
+  - id: learning-tech
+    label: 学習・講座
+    step: YouTube検索
+    source: youtube
+    q: "プログラミング|AIツール|ソフトウェア 使い方|開発 入門"
+    windowHours: 72
+    minViews: 0
+    maxDurationMinutes: 120
+    excludeTitle: "切り抜き|雑談|予告|告知"
+    excludeChannel: ""
+    excludeDescription: ""
+
+  - id: learning-creative
+    label: 学習・講座
+    step: YouTube検索
+    source: youtube
+    q: "イラスト 描き方|デザイン 講座|動画編集 使い方"
+    windowHours: 72
+    minViews: 0
+    maxDurationMinutes: 120
+    excludeTitle: "切り抜き|雑談|予告|告知"
+    excludeChannel: ""
+    excludeDescription: ""
+
   # ---- X API の代わり（2026-09-26〜）----
   # はてなブックマークの人気エントリー（カテゴリ別 RSS）。include に当たる記事をブックマーク数の伸び率で並べる。
   # categories: it（テクノロジー）/ game（アニメとゲーム）/ knowledge（学び）/ entertainment など
@@ -406,3 +434,14 @@ genres:
     requireImages: true
     minLikes: 80
     exclude: *landscapeExclude
+
+  # 登録チャンネルは通常の候補とは別枠。各カテゴリの最後に追加し、どこにも合わない動画は捨てる。
+  - { id: subscribed-music, label: 音楽・MV, step: 登録チャンネル, source: youtube-subscriptions }
+  - { id: subscribed-tech, label: 最新技術, step: 登録チャンネル, source: youtube-subscriptions }
+  - { id: subscribed-learning, label: 学習・講座, step: 登録チャンネル, source: youtube-subscriptions }
+  - { id: subscribed-expression, label: 表現の解説, step: 登録チャンネル, source: youtube-subscriptions }
+  - { id: subscribed-games, label: 最新ゲーム, step: 登録チャンネル, source: youtube-subscriptions }
+  - { id: subscribed-motivation, label: やる気が出る・元気になる, step: 登録チャンネル, source: youtube-subscriptions }
+  - { id: subscribed-sale, label: セール, step: 登録チャンネル, source: youtube-subscriptions }
+  - { id: subscribed-illustration, label: イラスト, step: 登録チャンネル, source: youtube-subscriptions }
+  - { id: subscribed-landscape, label: 風景写真, step: 登録チャンネル, source: youtube-subscriptions }

@@ -11,6 +11,7 @@
     "type-check": "tsc --noEmit --isolatedDeclarations",
     "new-post": "node scripts/new-post.js",
     "digest": "node scripts/daily-digest/index.mjs",
+    "digest:auth-youtube": "python3 scripts/daily-digest/authorize-youtube.py",
     "digest:check-deleted": "node scripts/daily-digest/check-deleted.mjs",
     "test:digest": "node --test \"scripts/daily-digest/test/*.test.mjs\"",
     "format": "biome format --write ./src",
