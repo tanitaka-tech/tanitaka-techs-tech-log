@@ -193,7 +193,7 @@ export async function searchYoutubeGenre(genre, window, config, key, now = new D
     ],
     drops,
   )
-  return (await excludeShortsAndStreams(videos, yc, drops)).map((v) => toYoutubeCandidate(v, genre, now))
+  return (await excludeShortsAndStreams(videos, { ...yc, maxDurationMinutes: genre.maxDurationMinutes ?? yc.maxDurationMinutes }, drops)).map((v) => toYoutubeCandidate(v, genre, now))
 }
 
 /** 削除・非公開・埋め込み不可になった動画IDを返す */

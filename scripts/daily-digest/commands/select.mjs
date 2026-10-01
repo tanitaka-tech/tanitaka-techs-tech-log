@@ -32,7 +32,7 @@ function draft(ctx, { reset }) {
   const adopted = selection.items.filter((i) => i.adopt !== false).length
   console.log(
     previous
-      ? `${ctx.paths.selection} に、まだなかった候補 ${added}件を不採用で足しました（全 ${selection.items.length}件、採用 ${adopted}件）`
+      ? `${ctx.paths.selection} に、まだなかった候補 ${added}件を追加しました（登録チャンネルは採用候補、全 ${selection.items.length}件、採用 ${adopted}件）`
       : `${ctx.paths.selection} に下書きを作りました（全 ${selection.items.length}件、おすすめ ${adopted}件）。topic・description を書いてから render してください`,
   )
 }
@@ -58,7 +58,7 @@ export async function select(ctx, { llm = false, providers: names, mock = false,
           return p
         })
       : config.llm.providers
-    const res = await selectAndWrite(shortlisted, {
+    const res = await selectAndWrite(shortlisted.filter((c) => c.origin !== "subscriptions"), {
       date,
       minItems,
       maxItems,
@@ -66,7 +66,11 @@ export async function select(ctx, { llm = false, providers: names, mock = false,
       maxItemsByCategory,
       providers,
     })
-    selection = { ...res.selection, by: `${res.provider} / ${res.model}` }
+    selection = {
+      ...res.selection,
+      items: [...res.selection.items, ...shortlisted.filter((c) => c.origin === "subscriptions").map((c) => ({ key: c.key, note: "" }))],
+      by: `${res.provider} / ${res.model}`,
+    }
   }
   writeJson(ctx.paths.selection, selection)
 

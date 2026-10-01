@@ -218,8 +218,10 @@ export function renderArticle({
   // ソースが違うとスコアの単位が揃わないので、step をまたいでスコアでは比べない
   const stepRank = (c) => (c.step ? stepOrder.indexOf(c.step) : -1)
   for (const list of groups.values()) {
+    // 登録チャンネルの動画は、同じセクションの通常候補の後ろに置く。
+    list.sort((a, b) => Number(a.c.origin === "subscriptions") - Number(b.c.origin === "subscriptions"))
     if (keepOrder || !list.some(({ c }) => c.step)) continue
-    list.sort((a, b) => stepRank(a.c) - stepRank(b.c) || b.c.score - a.c.score)
+    list.sort((a, b) => Number(a.c.origin === "subscriptions") - Number(b.c.origin === "subscriptions") || stepRank(a.c) - stepRank(b.c) || b.c.score - a.c.score)
   }
   const sections = [...groups].filter(([, list]) => list.length > 0)
 
@@ -255,7 +257,7 @@ ${list
     const meta = `${notes.length ? "⚠️ " : ""}${tocLabel(c).meta}`
     const noteHtml = notes.length ? `<p class="digest-review-note">⚠️ ${escapeText(notes.join(" / "))}</p>\n` : ""
     return `<!-- digest-item ${c.source}:${c.id} -->
-<div class="digest-entry digest-entry-${c.source}" data-url="${escapeAttr(c.url)}"${review ? ` data-key="${escapeAttr(c.key)}" data-adopt="${adopt !== false}"${thumbnail(c) ? ` data-image="${escapeAttr(thumbnail(c))}"` : ""}` : ""} data-label="${escapeAttr(tocLabel(c).label)}" data-meta="${escapeAttr(meta)}"${tocThumb(c) ? ` data-thumb="${escapeAttr(tocThumb(c))}"` : ""}${c.step ? ` data-step="${escapeAttr(c.step)}"` : ""}>
+<div class="digest-entry digest-entry-${c.source}" data-url="${escapeAttr(c.url)}"${review ? ` data-key="${escapeAttr(c.key)}" data-adopt="${adopt !== false}"${thumbnail(c) ? ` data-image="${escapeAttr(thumbnail(c))}"` : ""}` : ""}${c.origin === "subscriptions" ? ` data-origin="subscriptions"` : ""} data-label="${escapeAttr(tocLabel(c).label)}" data-meta="${escapeAttr(meta)}"${tocThumb(c) ? ` data-thumb="${escapeAttr(tocThumb(c))}"` : ""}${c.step ? ` data-step="${escapeAttr(c.step)}"` : ""}>
 ${noteHtml}${embed(c)}
 </div>
 <!-- /digest-item -->

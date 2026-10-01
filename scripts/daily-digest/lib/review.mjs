@@ -38,12 +38,12 @@ export function buildReview(ctx, candidates, { rules, usedKeys, previousDayKeys 
     entries.push(e)
   }
 
-  // ジャンルごとにスコア上位 perGenre 件と、pin された候補を候補一覧に入れる
+  // 登録チャンネルは収集した全件を候補一覧に出す。通常のジャンルだけ上位 perGenre 件に絞る。
   const counts = new Map()
   for (const e of entries) {
     if (e.excluded) continue
     const n = counts.get(e.c.genre) ?? 0
-    e.shortlisted = e.pinned || n < perGenre
+    e.shortlisted = e.pinned || genreById.get(e.c.genre)?.source === "youtube-subscriptions" || n < perGenre
     if (!e.pinned) counts.set(e.c.genre, n + 1)
   }
 
@@ -118,6 +118,7 @@ function toShortlistItem(e) {
     genreLabel: c.genreLabel,
     step: c.step,
     source: c.source,
+    origin: c.origin,
     title: c.title || undefined,
     text: c.text,
     author: c.author,
@@ -178,9 +179,10 @@ export function formatReview(ctx, entries, { all = false, selectedKeys = new Set
     const inCategory = entries.filter((e) => e.c.genreLabel === label && e.excluded !== "掲載済み")
     if (inCategory.length === 0) continue
     const shown = inCategory.filter((e) => all || e.shortlisted)
-    const picked = inCategory.filter((e) => selectedKeys.has(e.c.key)).length
+    const picked = inCategory.filter((e) => selectedKeys.has(e.c.key) && e.c.origin !== "subscriptions").length
+    const subscribed = inCategory.filter((e) => selectedKeys.has(e.c.key) && e.c.origin === "subscriptions").length
     out.push(
-      `\n## ${label}（候補 ${inCategory.filter((e) => e.shortlisted).length} / 全 ${inCategory.length}件、選択 ${picked} / 上限 ${ctx.categoryLimit(label)}）`,
+      `\n## ${label}（候補 ${inCategory.filter((e) => e.shortlisted).length} / 全 ${inCategory.length}件、通常 ${picked} / 上限 ${ctx.categoryLimit(label)}${subscribed ? `、登録 ${subscribed}件は別枠` : ""}）`,
     )
     let step
     for (const e of shown) {

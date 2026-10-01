@@ -17,6 +17,7 @@ import { fetchSteamNewReleases, fetchSteamSales } from "../lib/steam.mjs"
 import { searchXGenre } from "../lib/x.mjs"
 import { collectXYoutubeGenre } from "../lib/x-youtube.mjs"
 import { searchYoutubeGenre } from "../lib/youtube.mjs"
+import { collectSubscribedVideos } from "../lib/youtube-subscriptions.mjs"
 import { boostCharacterIllustration } from "../lib/score.mjs"
 
 function requireEnv(name) {
@@ -41,9 +42,14 @@ async function fetchAll(ctx, genres) {
   }
   const candidates = []
   const errors = []
+  let subscribedResults
+  let subscribedFailure
+  let subscribedAttempted = false
   // ジャンルごとの X 読み取り件数と候補数。review で歩留まりを出し、クエリの調整に使う
   const stats = {}
-  for (const genre of genres) {
+  // 登録動画は表示順では各カテゴリの最後だが、重複除去では登録チャンネル由来を残す。
+  const fetchOrder = [...genres].sort((a, b) => Number(b.source === "youtube-subscriptions") - Number(a.source === "youtube-subscriptions"))
+  for (const genre of fetchOrder) {
     const before = budget.remaining
     const drops = {}
     try {
@@ -69,6 +75,21 @@ async function fetchAll(ctx, genres) {
         const hours = genre.windowHours ?? config.youtube.windowHours
         const ytWindow = hours ? recentWindow(now, hours) : window
         found = await searchYoutubeGenre(genre, ytWindow, config, requireEnv("YOUTUBE_API_KEY"), now, drops)
+      } else if (genre.source === "youtube-subscriptions") {
+        if (!subscribedAttempted) {
+          subscribedAttempted = true
+          try {
+            subscribedResults = await collectSubscribedVideos({ now })
+            console.log(`[collect] 登録チャンネル: ${subscribedResults.subscriptions}件登録 / ${subscribedResults.channels}件確認 / 当日公開 ${subscribedResults.videos}件 / 対象外 ${subscribedResults.discarded}件`)
+            if (subscribedResults.failures.length) {
+              errors.push({ genre: "youtube-subscriptions", message: `${subscribedResults.failures.length}件のチャンネル・認可エラー（${subscribedResults.failures.slice(0, 3).join(" / ")}）` })
+            }
+          } catch (error) {
+            subscribedFailure = error
+          }
+        }
+        if (subscribedFailure) throw subscribedFailure
+        found = subscribedResults.candidates.filter((candidate) => candidate.genre === genre.id)
       } else if (genre.source === "steam-new" && config.steam.enabled) {
         found = await fetchSteamNewReleases(genre, now, drops)
       } else if (genre.source === "steam" && config.steam.enabled) {
@@ -154,6 +175,8 @@ async function collectSome(ctx, only) {
   const genres = targetGenres(ctx.config, only)
   if (genres.length === 0) throw new Error("取り直せるジャンルがありません")
   const ids = new Set(genres.map((g) => g.id))
+  const replacedErrors = new Set(ids)
+  if (genres.some((g) => g.source === "youtube-subscriptions")) replacedErrors.add("youtube-subscriptions")
   const { candidates, errors, stats, xReads } = await fetchAll(ctx, genres)
 
   const saved = readJson(paths.candidates)
@@ -166,7 +189,7 @@ async function collectSome(ctx, only) {
   writeJson(paths.collect, {
     ...collected,
     stats: { ...collected.stats, ...stats },
-    errors: [...(collected.errors ?? []).filter((e) => !ids.has(e.genre)), ...errors],
+    errors: [...(collected.errors ?? []).filter((e) => !replacedErrors.has(e.genre)), ...errors],
     xReads: (collected.xReads ?? 0) + xReads,
     // 取り直した時刻は対象期間とずれるので記録しておく
     recollected: [...(collected.recollected ?? []), { genres: [...ids], at: new Date().toISOString() }],

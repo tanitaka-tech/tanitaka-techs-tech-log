@@ -127,9 +127,14 @@ export async function setupDigestReview() {
 		counter.className = "digest-review-count";
 		section?.querySelector(":scope > h2 .digest-count")?.after(counter);
 		const updateCount = () => {
-			const n = entries.filter((e) => e.dataset.adopt !== "false").length;
-			counter.textContent = `採用 ${n} / 上限 ${limit}`;
-			counter.classList.toggle("over", n > limit);
+			const normal = entries.filter(
+				(e) => e.dataset.adopt !== "false" && e.dataset.origin !== "subscriptions",
+			).length;
+			const subscribed = entries.filter(
+				(e) => e.dataset.adopt !== "false" && e.dataset.origin === "subscriptions",
+			).length;
+			counter.textContent = `通常 ${normal} / 上限 ${limit}${subscribed ? ` ・登録 ${subscribed}（別枠）` : ""}`;
+			counter.classList.toggle("over", normal > limit);
 		};
 
 		// ドラッグ中に目次の上端・下端へ近づけたら、目次をその方向へスクロールする

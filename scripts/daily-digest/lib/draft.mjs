@@ -1,6 +1,6 @@
 /*
  * 候補一覧（shortlist）のすべてを入れた selection.json の下書きを作る。
- * おすすめ（adopt: true）はカテゴリの上限と記事全体の上限に収まるように機械的に選び、それ以外は adopt: false にする。
+ * 通常候補はカテゴリ・記事の上限内で選び、登録チャンネルは別枠ですべて採用候補にする。
  * Claude はこの下書きに note（注意）とおすすめの入れ替え、タイトル・説明を書き足すだけでよい。
  */
 
@@ -36,12 +36,12 @@ function pickInCategory(list, limit) {
 export function draftSelection(shortlist, { maxItems, categoryLimit, previous = null, resolve = (k) => k }) {
   if (previous) {
     const have = new Set((previous.items ?? []).map((i) => resolve(i.key)))
-    const added = shortlist.filter((c) => !have.has(c.key)).map((c) => ({ key: `#${c.no}`, note: "", adopt: false }))
+    const added = shortlist.filter((c) => !have.has(c.key)).map((c) => ({ key: `#${c.no}`, note: "", adopt: c.origin === "subscriptions" }))
     return { selection: { ...previous, items: [...(previous.items ?? []), ...added] }, added: added.length }
   }
 
   const byCategory = new Map()
-  for (const c of shortlist) {
+  for (const c of shortlist.filter((candidate) => candidate.origin !== "subscriptions")) {
     if (!byCategory.has(c.genreLabel)) byCategory.set(c.genreLabel, [])
     byCategory.get(c.genreLabel).push(c)
   }
@@ -54,9 +54,9 @@ export function draftSelection(shortlist, { maxItems, categoryLimit, previous = 
     total--
   }
   const adopted = new Set([...picks.values()].flat().map((c) => c.key))
-  const items = shortlist.map((c) => ({ key: `#${c.no}`, note: "", adopt: adopted.has(c.key) }))
+  const items = shortlist.map((c) => ({ key: `#${c.no}`, note: "", adopt: c.origin === "subscriptions" || adopted.has(c.key) }))
   // 記事のサムネイルには画像のある項目を使う（X・Bluesky・pixiv の項目は記事の画像にならない）
-  const top = shortlist.find((c) => adopted.has(c.key) && ["youtube", "soundcloud", "steam", "hatena"].includes(c.source))
+  const top = shortlist.find((c) => (c.origin === "subscriptions" || adopted.has(c.key)) && ["youtube", "soundcloud", "steam", "hatena"].includes(c.source))
   return {
     selection: { topic: "", topicKey: top ? `#${top.no}` : "", description: "", items },
     added: items.length,

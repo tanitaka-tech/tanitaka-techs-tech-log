@@ -1,9 +1,29 @@
 import assert from "node:assert/strict"
+import fs from "node:fs"
+import os from "node:os"
+import path from "node:path"
 import { describe, it } from "node:test"
-import { assignNumbers, buildReview, resolveKey } from "../lib/review.mjs"
+import { assignNumbers, buildReview, resolveKey, runReview } from "../lib/review.mjs"
 import { makeCandidate, makeCtx } from "./helpers.mjs"
 
 describe("buildReview", () => {
+  it("登録チャンネルの候補は通常ジャンルの件数上限を受けない", () => {
+    const ctx = makeCtx({
+      candidatesPerGenre: 2,
+      genres: [
+        { id: "subscribed-videos", label: "登録チャンネル", source: "youtube-subscriptions" },
+        { id: "mv", label: "音楽・MV", source: "youtube" },
+      ],
+    })
+    const cs = [
+      ...Array.from({ length: 12 }, (_, i) => makeCandidate({ id: `sub-${i}`, genre: "subscribed-videos", genreLabel: "登録チャンネル", origin: "subscriptions", score: i })),
+      ...Array.from({ length: 12 }, (_, i) => makeCandidate({ id: `normal-${i}`, genre: "mv", score: i })),
+    ]
+    const entries = buildReview(ctx, cs, { rules: [], usedKeys: new Set() })
+    assert.equal(entries.filter((e) => e.c.genre === "subscribed-videos" && e.shortlisted).length, 12)
+    assert.equal(entries.filter((e) => e.c.genre === "mv" && e.shortlisted).length, 2)
+  })
+
   it("ジャンルごとに上位だけを候補一覧に入れ、pin は別枠で入れる", () => {
     const ctx = makeCtx({ candidatesPerGenre: 2 })
     const cs = [1, 2, 3, 4].map((score) => makeCandidate({ score, id: `v${score}` }))
@@ -65,4 +85,16 @@ describe("resolveKey", () => {
     assert.equal(resolveKey("steam:1", numbers), "steam:1")
     assert.throws(() => resolveKey("#4", numbers), /#4/)
   })
+})
+
+it("候補一覧に登録チャンネル由来の印を残す", (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "digest-review-subscriptions-"))
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
+  const ctx = makeCtx({ genres: [{ id: "subscribed-tech", label: "最新技術", source: "youtube-subscriptions" }] })
+  ctx.config.article.dir = path.join(dir, "posts")
+  ctx.paths = Object.fromEntries(["candidates", "selection", "numbers", "shortlist", "collect"].map((name) => [name, path.join(dir, `${name}.json`)]))
+  fs.writeFileSync(ctx.paths.candidates, JSON.stringify([makeCandidate({ id: "subscription-origin", genre: "subscribed-tech", genreLabel: "最新技術", origin: "subscriptions" })]))
+  runReview(ctx)
+  const shortlist = JSON.parse(fs.readFileSync(ctx.paths.shortlist, "utf8"))
+  assert.equal(shortlist[0].origin, "subscriptions")
 })
