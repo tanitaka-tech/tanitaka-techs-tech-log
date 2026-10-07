@@ -13,7 +13,7 @@ html.is-animating .transition-swup-fade {
         opacity: 0;
     }
     100% {
-        transform: translateY(0);
+        transform: none;
         opacity: 1;
     }
 }

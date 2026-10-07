@@ -69,16 +69,24 @@ function digestThumb(entry: HTMLElement) {
  * 長くない項目には付けない（はみ出しを隠すと、埋め込みの影などが切れるため）
  */
 function limitIfTall(entry: HTMLElement) {
-	entry.classList.toggle(
-		"digest-tall",
-		entry.scrollHeight > DIGEST_TALL_PX + 40,
-	);
+	const isTall = entry.classList.contains("digest-tall");
+	// 一度スクロール可能にした項目は、DIGEST_TALL_PX（640px）を下回るまで解除しない。
+	// スクロールバーの出現で横幅が縮み画像が小さくなって高さが 680px を切っても、
+	// 640px を超えている限りスクロールバーを維持することで、
+	// スクロールバーの出入りによる急速なガクつき（チャタリング）を防ぐ
+	const shouldBeTall = isTall
+		? entry.scrollHeight > DIGEST_TALL_PX
+		: entry.scrollHeight > DIGEST_TALL_PX + 40;
+	if (isTall !== shouldBeTall) {
+		entry.classList.toggle("digest-tall", shouldBeTall);
+	}
 }
 
 /** カルーセルを外から操作するためのもの（プレビューの並べ替えで使う） */
 export type DigestList = {
 	entries: HTMLElement[];
 	tabOf: (entry: HTMLElement) => HTMLButtonElement | undefined;
+	select: (entry: HTMLElement) => void;
 	/** order の順に並べ替える（ページは読み込み直さない） */
 	reorder: (order: HTMLElement[]) => void;
 };
@@ -423,7 +431,9 @@ export function setupDigestLists() {
 		// 上下するのを防ぐ。画面幅が変わったときだけ新しい幅で測り直す。
 		const resize = () => {
 			const width = wrap.clientWidth;
-			if (width !== measuredWidth) {
+			// スクロールバーの出入り程度の幅の微小変化（十数px）では高さをリセットせず、
+			// ウィンドウのリサイズなど明らかな幅の変化（30px以上）のときだけ測り直す
+			if (Math.abs(width - measuredWidth) > 30) {
 				measuredWidth = width;
 				maxHeight = 0;
 			}
@@ -444,6 +454,10 @@ export function setupDigestLists() {
 		digestLists.set(panel, {
 			entries,
 			tabOf: (entry) => tabByEntry.get(entry),
+			select: (entry) => {
+				const index = entries.indexOf(entry);
+				if (index !== -1) commit(index, false);
+			},
 			reorder: (order) => {
 				const current = entries[active];
 				entries.splice(0, entries.length, ...order);

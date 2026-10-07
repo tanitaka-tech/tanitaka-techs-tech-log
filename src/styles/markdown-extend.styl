@@ -396,6 +396,37 @@
       color: #fff
       background: rgba(0, 0, 0, 0.7)
 
+    // バーで再生中のハイライト表示
+    &.is-active-media
+      outline: 3px solid var(--primary)
+      outline-offset: -3px
+
+      &::after
+        content: "バーで再生中 🎵"
+        position: absolute
+        top: 0.75rem
+        right: 0.75rem
+        padding: 0.2rem 0.55rem
+        border-radius: 9999px
+        background: var(--primary)
+        color: #fff
+        font-size: 0.72rem
+        font-weight: 600
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4)
+        z-index: 2
+        pointer-events: none
+
+      &.is-playing-media .digest-youtube-play
+        background: var(--primary)
+        &::after
+          border: none
+          width: 4px
+          height: 18px
+          background: #fff
+          box-shadow: 8px 0 0 #fff
+          top: 15px
+          left: 26px
+
   // SoundCloud のアートワーク。ぼかしたアートワークを背景に敷き、YouTube と同じ 16:9 に揃える。
   // クリックでプレーヤーに差し替える
   a.digest-soundcloud-facade
@@ -732,6 +763,7 @@
     overflow-y: auto
     overscroll-behavior: auto
     scrollbar-width: thin
+    scrollbar-gutter: stable
 
   // SoundCloud のプレーヤー
   .digest-soundcloud-player
@@ -1113,3 +1145,595 @@ a.card-github.fetch-error
   transition-property: all
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1)
   transition-duration: 0.15s
+
+// ==========================================
+// デイリーダイジェスト: スクロール追従プレイヤー
+// ==========================================
+
+// ==========================================
+// デイリーダイジェスト: 共通固定プレイヤーバー（YouTube / SoundCloud 共通）
+// ==========================================
+
+body.has-digest-player-bar
+  padding-bottom: 4.5rem !important
+
+// 画面下部プレイヤーバー（YouTube・SoundCloud 共通）
+.digest-player-bar, .digest-audio-bar
+  position: fixed
+  bottom: 0
+  left: 0
+  right: 0
+  height: 4.25rem
+  z-index: 1000
+  background: var(--card-bg, #ffffff)
+  backdrop-filter: blur(16px)
+  -webkit-backdrop-filter: blur(16px)
+  border-top: 1px solid var(--line-color, rgba(0, 0, 0, 0.1))
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.1)
+  display: flex
+  align-items: center
+  justify-content: space-between
+  padding: 0 1.25rem
+  gap: 1rem
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease
+  transform: translateY(0)
+  color: var(--text-color, inherit)
+
+  &.hidden-bar
+    transform: translateY(100%) !important
+    pointer-events: none !important
+
+  .bar-info
+    display: flex
+    align-items: center
+    gap: 0.75rem
+    min-width: 0
+    max-width: 28%
+    flex-shrink: 0
+
+    .bar-thumb-wrapper
+      position: relative
+      width: 2.85rem
+      height: 2.85rem
+      border-radius: 0.5rem
+      overflow: hidden
+      flex-shrink: 0
+      cursor: pointer
+      background: var(--btn-regular-bg, #eee)
+      transition: transform 0.15s
+
+      &:hover
+        transform: scale(1.05)
+
+      img
+        width: 100%
+        height: 100%
+        object-fit: cover
+        display: block
+
+      .bar-type-badge
+        position: absolute
+        bottom: 2px
+        right: 2px
+        font-size: 0.5rem
+        font-weight: 700
+        padding: 1px 3px
+        border-radius: 3px
+        background: rgba(0, 0, 0, 0.75)
+        color: #fff
+        line-height: 1
+        letter-spacing: 0.02em
+
+        &.type-youtube
+          background: #ff0000
+        &.type-soundcloud
+          background: #ff5500
+
+    .bar-text
+      min-width: 0
+      overflow: hidden
+
+      .bar-title
+        font-size: 0.85rem
+        font-weight: 600
+        line-height: 1.2
+        white-space: nowrap
+        overflow: hidden
+        text-overflow: ellipsis
+        cursor: pointer
+
+        &:hover
+          color: var(--primary)
+
+      .bar-artist
+        font-size: 0.75rem
+        opacity: 0.7
+        white-space: nowrap
+        overflow: hidden
+        text-overflow: ellipsis
+
+  .bar-center
+    display: flex
+    flex-direction: column
+    align-items: center
+    justify-content: center
+    flex: 1
+    max-width: 32rem
+    gap: 0.25rem
+    min-width: 0
+
+    .bar-buttons
+      display: flex
+      align-items: center
+      gap: 0.75rem
+
+    .bar-btn
+      display: inline-flex
+      align-items: center
+      justify-content: center
+      width: 1.85rem
+      height: 1.85rem
+      border-radius: 9999px
+      background: var(--btn-regular-bg, rgba(0, 0, 0, 0.06))
+      color: inherit
+      border: none
+      cursor: pointer
+      font-size: 0.85rem
+      transition: background 0.15s, transform 0.1s
+
+      &:hover
+        background: var(--btn-regular-bg-hover, rgba(0, 0, 0, 0.12))
+        color: var(--primary)
+        transform: scale(1.05)
+
+      &.bar-btn-play
+        width: 2.25rem
+        height: 2.25rem
+        background: var(--primary)
+        color: #fff
+        font-size: 1rem
+
+        &:hover
+          filter: brightness(1.1)
+
+    .bar-progress-row
+      display: flex
+      align-items: center
+      width: 100%
+      gap: 0.5rem
+      font-size: 0.7rem
+      font-variant-numeric: tabular-nums
+      opacity: 0.8
+
+      .bar-progress-slider
+        flex: 1
+        height: 4px
+        background: var(--line-color, rgba(0, 0, 0, 0.15))
+        border-radius: 2px
+        position: relative
+        cursor: pointer
+        transition: height 0.15s
+
+        &:hover
+          height: 6px
+
+        .bar-progress-fill
+          position: absolute
+          top: 0
+          left: 0
+          bottom: 0
+          background: var(--primary)
+          border-radius: 2px
+          width: 0%
+
+  .bar-right
+    display: flex
+    align-items: center
+    gap: 0.6rem
+    flex-shrink: 0
+
+    .bar-adopt-btn
+      display: inline-flex
+      align-items: center
+      gap: 0.35rem
+      padding: 0.35rem 0.65rem
+      border-radius: 0.5rem
+      font-size: 0.75rem
+      font-weight: 600
+      cursor: pointer
+      border: 1px solid transparent
+      transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.1s
+
+      &.hidden
+        display: none !important
+
+      &:hover
+        transform: scale(1.05)
+
+      &.is-adopted
+        background: rgba(42, 157, 92, 0.14)
+        border-color: rgba(42, 157, 92, 0.35)
+        color: #2a9d5c
+
+        &:hover
+          background: rgba(42, 157, 92, 0.22)
+
+      &.is-rejected
+        background: rgba(220, 38, 38, 0.14)
+        border-color: rgba(220, 38, 38, 0.35)
+        color: #dc2626
+
+        &:hover
+          background: rgba(220, 38, 38, 0.22)
+
+    .bar-volume
+      display: flex
+      align-items: center
+      gap: 0.35rem
+
+      input
+        width: 5rem
+        accent-color: var(--primary)
+        cursor: pointer
+
+    .bar-action-btn
+      display: inline-flex
+      align-items: center
+      justify-content: center
+      padding: 0.35rem 0.6rem
+      border-radius: 0.5rem
+      background: var(--btn-regular-bg, rgba(0, 0, 0, 0.05))
+      color: inherit
+      border: none
+      cursor: pointer
+      font-size: 0.75rem
+      gap: 0.25rem
+      transition: background 0.15s, color 0.15s
+
+      &:hover
+        background: var(--btn-regular-bg-hover, rgba(0, 0, 0, 0.1))
+        color: var(--primary)
+
+    .bar-close-btn
+      width: 1.85rem
+      height: 1.85rem
+      border-radius: 9999px
+      background: transparent
+      border: none
+      cursor: pointer
+      display: inline-flex
+      align-items: center
+      justify-content: center
+      font-size: 1rem
+      opacity: 0.6
+      transition: opacity 0.15s, transform 0.1s
+
+      &:hover
+        opacity: 1
+        transform: scale(1.1)
+
+// 一時的に隠されたときの再表示バッジ（ピル）
+.digest-restore-badge
+  position: fixed
+  right: 1.5rem
+  bottom: 1.5rem
+  z-index: 1001
+  display: flex
+  align-items: center
+  gap: 0.5rem
+  padding: 0.5rem 0.9rem
+  border-radius: 9999px
+  background: var(--card-bg, #ffffff)
+  color: var(--primary)
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15)
+  border: 1px solid var(--line-color, rgba(0, 0, 0, 0.1))
+  cursor: pointer
+  font-size: 0.8rem
+  font-weight: 600
+  backdrop-filter: blur(12px)
+  -webkit-backdrop-filter: blur(12px)
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s
+  animation: badge-appear 0.25s ease
+
+  &:hover
+    transform: translateY(-2px) scale(1.03)
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2)
+
+  &.hidden
+    display: none !important
+
+  .badge-pulse
+    display: inline-block
+    width: 8px
+    height: 8px
+    border-radius: 9999px
+    background: var(--primary)
+    animation: badge-pulse 1.5s infinite
+
+@keyframes badge-appear
+  from
+    opacity: 0
+    transform: translateY(10px) scale(0.9)
+  to
+    opacity: 1
+    transform: translateY(0) scale(1)
+
+@keyframes badge-pulse
+  0%
+    transform: scale(0.9)
+    box-shadow: 0 0 0 0 rgba(100, 100, 255, 0.7)
+  70%
+    transform: scale(1)
+    box-shadow: 0 0 0 6px rgba(100, 100, 255, 0)
+  100%
+    transform: scale(0.9)
+    box-shadow: 0 0 0 0 rgba(100, 100, 255, 0)
+
+// 元の場所に戻ったときのエントリのハイライトフラッシュ
+@keyframes entry-flash-highlight
+  0%
+    outline: 3px solid var(--primary)
+    outline-offset: 4px
+  100%
+    outline: 3px solid transparent
+    outline-offset: 12px
+
+.digest-entry-highlight
+  animation: entry-flash-highlight 1.5s ease-out forwards
+
+@media (max-width: 640px)
+  .digest-player-bar, .digest-audio-bar
+    height: 3.75rem
+    padding: 0 0.75rem
+    gap: 0.5rem
+
+    .bar-info
+      max-width: 48%
+
+      .bar-thumb-wrapper
+        width: 2.25rem
+        height: 2.25rem
+
+    .bar-right .bar-volume
+      display: none
+
+    .bar-right .bar-action-btn span
+      display: none
+
+    .bar-right .bar-adopt-btn
+      padding: 0.35rem 0.45rem
+      .adopt-label
+        display: none
+
+// ==========================================
+// デイリーダイジェスト: Picture-in-Picture 動画ウィンドウ
+// ==========================================
+.digest-pip-window
+  position: fixed
+  z-index: 1002
+  background: #0f1015
+  border-radius: 0.75rem
+  overflow: hidden
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45)
+  border: 1px solid var(--line-color, rgba(255, 255, 255, 0.18))
+  display: flex
+  flex-direction: column
+  user-select: none
+  -webkit-user-select: none
+  touch-action: none
+  transition: opacity 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease
+  box-sizing: border-box
+
+  &.hidden
+    display: none !important
+
+  &.pip-highlight
+    animation: pip-flash-highlight 1.2s ease-out forwards
+
+  &.is-dragging
+    opacity: 0.95
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6)
+    cursor: grabbing !important
+
+  &.is-resizing
+    opacity: 0.95
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6)
+
+  &.is-collapsed
+    height: 36px !important
+    width: 260px !important
+
+    .pip-body
+      display: none !important
+
+    .pip-resizer
+      display: none !important
+
+  .pip-header
+    height: 36px
+    background: rgba(18, 19, 26, 0.95)
+    backdrop-filter: blur(8px)
+    -webkit-backdrop-filter: blur(8px)
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08)
+    display: flex
+    align-items: center
+    justify-content: space-between
+    padding: 0 0.5rem 0 0.65rem
+    gap: 0.5rem
+    flex-shrink: 0
+    color: #e2e8f0
+
+    .pip-drag-handle
+      flex: 1
+      min-width: 0
+      display: flex
+      align-items: center
+      gap: 0.4rem
+      cursor: grab
+      height: 100%
+
+      &:active
+        cursor: grabbing
+
+      .pip-grip
+        opacity: 0.4
+        font-size: 0.75rem
+        letter-spacing: -0.1em
+        line-height: 1
+
+      .pip-title
+        font-size: 0.75rem
+        font-weight: 500
+        white-space: nowrap
+        overflow: hidden
+        text-overflow: ellipsis
+        opacity: 0.85
+        cursor: pointer
+
+        &:hover
+          color: var(--primary)
+          opacity: 1
+
+    .pip-actions
+      display: flex
+      align-items: center
+      gap: 0.25rem
+      flex-shrink: 0
+
+      .pip-btn
+        width: 1.5rem
+        height: 1.5rem
+        border-radius: 0.35rem
+        background: transparent
+        border: none
+        color: rgba(255, 255, 255, 0.7)
+        cursor: pointer
+        display: inline-flex
+        align-items: center
+        justify-content: center
+        font-size: 0.75rem
+        transition: background 0.15s, color 0.15s, transform 0.1s
+
+        &:hover
+          background: rgba(255, 255, 255, 0.15)
+          color: #fff
+          transform: scale(1.08)
+
+        &.pip-adopt-btn
+          font-size: 0.8rem
+          &.hidden
+            display: none !important
+          &.is-adopted
+            background: rgba(42, 157, 92, 0.2)
+            color: #2a9d5c
+            &:hover
+              background: rgba(42, 157, 92, 0.35)
+          &.is-rejected
+            background: rgba(220, 38, 38, 0.2)
+            color: #dc2626
+            &:hover
+              background: rgba(220, 38, 38, 0.35)
+
+        &.pip-close-btn:hover
+          background: rgba(239, 68, 68, 0.8)
+          color: #fff
+
+  .pip-body
+    flex: 1
+    position: relative
+    background: #000
+    overflow: hidden
+    min-height: 0
+
+    .pip-video-container
+      width: 100%
+      height: 100%
+      position: relative
+
+      iframe
+        width: 100% !important
+        height: 100% !important
+        border: 0 !important
+        display: block !important
+
+    .pip-drag-shield
+      position: absolute
+      inset: 0
+      z-index: 10
+      display: none
+      background: transparent
+
+  // リサイズハンドル
+  .pip-resizer
+    position: absolute
+    width: 20px
+    height: 20px
+    z-index: 20
+
+    &::after
+      content: ""
+      position: absolute
+      width: 7px
+      height: 7px
+      border-color: rgba(255, 255, 255, 0.4)
+      border-style: solid
+      transition: border-color 0.15s, transform 0.15s
+
+    &:hover::after
+      border-color: var(--primary, #3b82f6)
+      transform: scale(1.3)
+
+    &.pip-resizer-se
+      right: 0
+      bottom: 0
+      cursor: nwse-resize
+      &::after
+        right: 4px
+        bottom: 4px
+        border-width: 0 2px 2px 0
+
+    &.pip-resizer-sw
+      left: 0
+      bottom: 0
+      cursor: nesw-resize
+      &::after
+        left: 4px
+        bottom: 4px
+        border-width: 0 0 2px 2px
+
+    &.pip-resizer-ne
+      right: 0
+      top: 36px
+      cursor: nesw-resize
+      &::after
+        right: 4px
+        top: 4px
+        border-width: 2px 2px 0 0
+
+    &.pip-resizer-nw
+      left: 0
+      top: 36px
+      cursor: nwse-resize
+      &::after
+        left: 4px
+        top: 4px
+        border-width: 2px 0 0 2px
+
+@keyframes pip-flash-highlight
+  0%
+    box-shadow: 0 0 0 0 var(--primary)
+    border-color: var(--primary)
+  50%
+    box-shadow: 0 0 0 6px var(--primary)
+    border-color: var(--primary)
+  100%
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45)
+    border-color: var(--line-color, rgba(255, 255, 255, 0.18))
+
+@media (max-width: 640px)
+  .digest-pip-window
+    max-width: calc(100vw - 1.5rem) !important
+    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.5) !important
+
+
+

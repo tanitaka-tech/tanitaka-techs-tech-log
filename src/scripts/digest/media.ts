@@ -1,7 +1,23 @@
 // デイリーダイジェストの動画・曲（YouTube・SoundCloud）。サムネイルからプレーヤーへの差し替え、目次の再生ボタン・再生バー、共通の音量
+import { getBarVideoContainer } from "./floating-player";
 
 export const isMediaEntry = (entry: HTMLElement) =>
 	entry.matches(".digest-entry-youtube, .digest-entry-soundcloud");
+
+/** ファサードのアクティブ（再生中）状態を最新にする */
+export function updateActiveMediaFacades() {
+	for (const facade of document.querySelectorAll<HTMLAnchorElement>(
+		"a.digest-youtube-facade",
+	)) {
+		const entryEl = facade.closest(".digest-entry") as HTMLElement | null;
+		const player = media.players.find(
+			(p) =>
+				p.type === "youtube" && (p.entry === entryEl || p.entry === facade),
+		);
+		facade.classList.toggle("is-active-media", !!player);
+		facade.classList.toggle("is-playing-media", !!player?.playing);
+	}
+}
 
 /** 目次の再生ボタンの表示を、各プレーヤーの再生状態に合わせる */
 export function updatePlayButtons() {
@@ -11,10 +27,13 @@ export function updatePlayButtons() {
 		const entry = playButtonEntries.get(button);
 		const playing =
 			!!entry &&
-			media.players.some((p) => p.playing && entry.contains(p.frame));
+			media.players.some(
+				(p) => p.playing && (p.entry === entry || entry.contains(p.frame)),
+			);
 		button.textContent = playing ? "⏸" : "▶";
 		button.setAttribute("aria-label", playing ? "停止" : "再生");
 	}
+	updateActiveMediaFacades();
 	// 停止したときも、止まった位置で再生バーを表示しておく
 	updateProgressBars();
 }
@@ -45,7 +64,8 @@ export function createProgressBar(entry: HTMLElement, tab: HTMLElement) {
 		const r = bar.getBoundingClientRect();
 		return Math.max(0, Math.min(1, (clientX - r.left) / r.width));
 	};
-	const player = () => media.players.find((p) => entry.contains(p.frame));
+	const player = () =>
+		media.players.find((p) => p.entry === entry || entry.contains(p.frame));
 	bar.addEventListener("pointerdown", (e) => {
 		e.stopPropagation();
 		e.preventDefault();
@@ -88,7 +108,9 @@ async function updateProgressBars() {
 	)) {
 		const state = progressBars.get(bar);
 		if (!state) continue;
-		const player = media.players.find((p) => state.entry.contains(p.frame));
+		const player = media.players.find(
+			(p) => p.entry === state.entry || state.entry.contains(p.frame),
+		);
 		bar.classList.toggle("visible", !!player?.started);
 		if (!player?.started || state.seeking) continue;
 		const { position, duration } = await player.progress();
@@ -104,27 +126,49 @@ setInterval(() => {
 	if (media.players.some((p) => p.playing)) updateProgressBars();
 }, 500);
 
-/** 項目の動画・曲を再生・停止する。まだプレーヤーになっていなければ、サムネイルを押したのと同じく読み込んで再生する */
+/** 項目の動画・曲を再生・停止する。まだプレーヤーになっていなければ、読み込んで再生する */
 export function togglePlay(entry: HTMLElement) {
-	const player = media.players.find((p) => entry.contains(p.frame));
+	const player = media.players.find(
+		(p) => p.entry === entry || entry.contains(p.frame),
+	);
 	if (player) {
-		if (player.playing) player.pause();
-		else {
+		if (player.playing) {
+			player.pause();
+			player.playing = false;
+			notifyMediaState(player);
+		} else {
 			pauseOthers(player.frame);
+			player.playing = true;
+			player.started = true;
 			player.play();
+			notifyMediaState(player);
 		}
+		updatePlayButtons();
 		return;
 	}
-	entry
-		.querySelector<HTMLElement>(
-			".digest-youtube-facade, .digest-soundcloud-facade",
-		)
-		?.click();
+	// まだマウントされていない場合、他を停止してからマウント実行
+	pauseOthers();
+	const ytFacade = entry.querySelector<HTMLAnchorElement>(
+		"a.digest-youtube-facade",
+	);
+	if (ytFacade) {
+		mountYoutube(ytFacade);
+		return;
+	}
+	const scFacade = entry.querySelector<HTMLAnchorElement>(
+		"a.digest-soundcloud-facade",
+	);
+	if (scFacade) {
+		mountSoundcloud(scFacade, true);
+		return;
+	}
 }
 
 // YouTube・SoundCloud は最初サムネイルだけを表示し、クリックでプレーヤーに差し替える。
 // 1本再生したら他（YouTube と SoundCloud の両方）を一時停止する
 export type MediaPlayer = {
+	type: "youtube" | "soundcloud";
+	entry: HTMLElement;
 	frame: HTMLIFrameElement;
 	playing: boolean;
 	/** 一度でも再生したか（目次の再生バーを出すかどうか） */
@@ -136,20 +180,55 @@ export type MediaPlayer = {
 	progress: () => Promise<{ position: number; duration: number }>;
 	seek: (seconds: number) => void;
 };
+
+export type MediaStateListener = (player: MediaPlayer) => void;
+const mediaStateListeners: MediaStateListener[] = [];
+export function onMediaStateChange(listener: MediaStateListener): () => void {
+	mediaStateListeners.push(listener);
+	return () => {
+		const index = mediaStateListeners.indexOf(listener);
+		if (index !== -1) mediaStateListeners.splice(index, 1);
+	};
+}
+export function notifyMediaState(player: MediaPlayer): void {
+	for (const cb of mediaStateListeners) {
+		try {
+			cb(player);
+		} catch {}
+	}
+}
+
+/** ページにあるすべての動画・曲のエントリを取得 */
+export function getAllMediaEntries(): HTMLElement[] {
+	return [
+		...document.querySelectorAll<HTMLElement>(
+			".digest-entry-youtube, .digest-entry-soundcloud",
+		),
+	];
+}
+
 /** ページにある動画・曲のプレーヤーと音量のスライダー。ページ遷移のたびに空にする（index.ts） */
 export const media = {
 	players: [] as MediaPlayer[],
 	volumeInputs: [] as HTMLInputElement[],
 };
 export const pauseOthers = (frame?: HTMLIFrameElement) => {
-	for (const other of media.players) if (other.frame !== frame) other.pause();
+	for (const other of media.players) {
+		if (other.frame !== frame) {
+			other.pause();
+			if (other.playing) {
+				other.playing = false;
+				notifyMediaState(other);
+			}
+		}
+	}
 };
 
 // 動画・曲の音量（0〜100）。SoundCloud のプレーヤーには音量の操作がないので、カルーセルの下に自前の
 // スライダーを常に出し、YouTube と SoundCloud の全プレーヤーで共有してブラウザに覚えておく
 const MEDIA_VOLUME_KEY = "digest-media-volume";
 
-function mediaVolume() {
+export function mediaVolume(): number {
 	try {
 		// 以前は SoundCloud だけの音量として保存していた
 		const raw =
@@ -162,7 +241,7 @@ function mediaVolume() {
 	}
 }
 
-function setMediaVolume(volume: number) {
+export function setMediaVolume(volume: number): void {
 	try {
 		localStorage.setItem(MEDIA_VOLUME_KEY, String(volume));
 	} catch {}
@@ -202,32 +281,93 @@ function withYouTubeApi(callback: () => void) {
 }
 
 /**
- * プレーヤーの下に「読み込み直す」「YouTube で開く」を付ける（最初は隠しておく）。
- * YouTube が bot の確認（ログインを求める画面）を出したとき、別のタブでログインしてから読み込み直せるように。
- * 確認の画面はプレーヤーではないので、プレーヤーの準備完了（onReady）が来ない・エラーになったときだけ出す
+ * YouTube の動画を画面下部プレイヤーバーの動画枠（.bar-video-container）に小さく埋め込んで再生する
  */
-function youtubePlayer(
-	iframe: HTMLIFrameElement,
-	url: string,
-	onReload: () => void,
-) {
-	const player = document.createElement("div");
-	player.className = "digest-youtube-player";
-	const help = document.createElement("div");
-	help.className = "digest-youtube-help";
-	help.hidden = true;
-	const reload = document.createElement("button");
-	reload.type = "button";
-	reload.textContent = "読み込み直す";
-	reload.addEventListener("click", onReload);
-	const open = document.createElement("a");
-	open.href = url;
-	open.target = "_blank";
-	open.rel = "noopener";
-	open.textContent = "YouTube で開く";
-	help.append("再生できないとき: ", reload, open);
-	player.append(iframe, help);
-	return player;
+export function mountYoutube(facade: HTMLAnchorElement) {
+	if (!facade.isConnected) return;
+	const entryEl = (facade.closest(".digest-entry") ?? facade) as HTMLElement;
+
+	// 既存の YouTube プレーヤーがあれば停止してクリーンアップ
+	const existingIndex = media.players.findIndex((p) => p.type === "youtube");
+	if (existingIndex !== -1) {
+		const existing = media.players[existingIndex];
+		try {
+			existing.pause();
+		} catch {}
+		media.players.splice(existingIndex, 1);
+	}
+
+	const container = getBarVideoContainer();
+	container.innerHTML = "";
+
+	const iframe = document.createElement("iframe");
+	iframe.className = "digest-youtube digest-youtube-bar-frame";
+	const origin = encodeURIComponent(location.origin);
+	iframe.src = `https://www.youtube.com/embed/${facade.dataset.videoId}?enablejsapi=1&autoplay=1&origin=${origin}`;
+	iframe.referrerPolicy = "strict-origin-when-cross-origin";
+	iframe.title = facade.dataset.title ?? "";
+	iframe.allow =
+		"accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture";
+	iframe.allowFullscreen = true;
+	container.appendChild(iframe);
+
+	// biome-ignore lint/suspicious/noExplicitAny: YouTube player instance
+	let ytPlayerInstance: any = null;
+	let ready = false;
+
+	const entry: MediaPlayer = {
+		type: "youtube",
+		entry: entryEl,
+		frame: iframe,
+		playing: true, // クリックされたら再生開始とみなす
+		started: true,
+		play: () => {
+			if (ready && ytPlayerInstance) {
+				ytPlayerInstance.playVideo?.();
+			}
+		},
+		pause: () => ytPlayerInstance?.pauseVideo?.(),
+		setVolume: (v) => ytPlayerInstance?.setVolume?.(v),
+		progress: async () => ({
+			position: ytPlayerInstance?.getCurrentTime?.() ?? 0,
+			duration: ytPlayerInstance?.getDuration?.() ?? 0,
+		}),
+		seek: (seconds) => ytPlayerInstance?.seekTo?.(seconds, true),
+	};
+
+	media.players.push(entry);
+	pauseOthers(iframe);
+	notifyMediaState(entry);
+	updatePlayButtons();
+
+	withYouTubeApi(() => {
+		const YT = window.YT;
+		if (!YT) return;
+		const player = new YT.Player(iframe, {
+			events: {
+				onReady: () => {
+					ready = true;
+					ytPlayerInstance = player;
+					player.setVolume?.(mediaVolume());
+					player.playVideo?.();
+				},
+				onError: () => {
+					// 埋め込み不可などの場合、ファサードに外部リンクを表示する
+					entryEl.classList.add("has-embed-error");
+				},
+				onStateChange: (event) => {
+					// 読み込み中（3: BUFFERING）も再生中として扱う
+					entry.playing =
+						event.data === YT.PlayerState.PLAYING || event.data === 3;
+					if (entry.playing) entry.started = true;
+					updatePlayButtons();
+					notifyMediaState(entry);
+					if (entry.playing) pauseOthers(iframe);
+				},
+			},
+		});
+		ytPlayerInstance = player;
+	});
 }
 
 export function setupYoutube() {
@@ -241,83 +381,19 @@ export function setupYoutube() {
 		facade.dataset.ready = "true";
 		facade.addEventListener("click", (e) => {
 			e.preventDefault();
-			const iframe = document.createElement("iframe");
-			iframe.className = "digest-youtube";
-			// youtube-nocookie.com はログインの Cookie を使わないので、「bot ではないことを確認」でログインしても
-			// 解除されない。www.youtube.com を使い、YouTube が確認に使う Referer と origin も渡す
-			const origin = encodeURIComponent(location.origin);
-			iframe.src = `https://www.youtube.com/embed/${facade.dataset.videoId}?enablejsapi=1&autoplay=1&origin=${origin}`;
-			iframe.referrerPolicy = "strict-origin-when-cross-origin";
-			iframe.title = facade.dataset.title ?? "";
-			iframe.allow =
-				"accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture";
-			iframe.allowFullscreen = true;
-			// 読み込み直すときは、サムネイルに戻してからもう一度押したことにする（プレーヤーも作り直す）
-			const wrapper = youtubePlayer(iframe, facade.href, () => {
-				clearTimeout(timer);
-				media.players = media.players.filter((p) => p.frame !== iframe);
-				wrapper.replaceWith(facade);
-				facade.click();
-			});
-			const help = wrapper.querySelector<HTMLElement>(".digest-youtube-help");
-			const showHelp = (show: boolean) => {
-				if (help) help.hidden = !show;
-			};
-			let ready = false;
-			// 準備完了が来なければ、bot の確認などで再生できていない
-			const YOUTUBE_READY_TIMEOUT_MS = 8000;
-			const timer = setTimeout(
-				() => showHelp(!ready),
-				YOUTUBE_READY_TIMEOUT_MS,
-			);
-			facade.replaceWith(wrapper);
-			pauseOthers();
-			withYouTubeApi(() => {
-				const YT = window.YT;
-				if (!YT) return;
-				const entry: MediaPlayer = {
-					frame: iframe,
-					playing: false,
-					started: false,
-					play: () => player.playVideo?.(),
-					pause: () => player.pauseVideo?.(),
-					setVolume: (v) => player.setVolume?.(v),
-					progress: async () => ({
-						position: player.getCurrentTime?.() ?? 0,
-						duration: player.getDuration?.() ?? 0,
-					}),
-					seek: (seconds) => player.seekTo?.(seconds, true),
-				};
-				const player = new YT.Player(iframe, {
-					events: {
-						onReady: () => {
-							ready = true;
-							clearTimeout(timer);
-							showHelp(false);
-							player.setVolume?.(mediaVolume());
-						},
-						// 埋め込み不可・削除済みなど
-						onError: () => showHelp(true),
-						onStateChange: (event) => {
-							// 目次の再生ボタンの表示に使う
-							// 読み込み中（3: BUFFERING）も再生中として扱い、ボタンの表示がちらつかないようにする
-							entry.playing =
-								event.data === YT.PlayerState.PLAYING || event.data === 3;
-							if (entry.playing) entry.started = true;
-							if (entry.playing) showHelp(false);
-							updatePlayButtons();
-							if (entry.playing) pauseOthers(iframe);
-						},
-					},
-				});
-				media.players.push(entry);
-			});
+			const entryEl = (facade.closest(".digest-entry") ??
+				facade) as HTMLElement;
+			togglePlay(entryEl);
 		});
 	}
 }
 
+const soundcloudApiCallbacks: (() => void)[] = [];
+let soundcloudApiLoaded = false;
+
 function withSoundcloudApi(callback: () => void) {
 	if (window.SC?.Widget) return callback();
+	soundcloudApiCallbacks.push(callback);
 	let script = document.getElementById(
 		"soundcloud-widget-api",
 	) as HTMLScriptElement | null;
@@ -325,9 +401,14 @@ function withSoundcloudApi(callback: () => void) {
 		script = document.createElement("script");
 		script.id = "soundcloud-widget-api";
 		script.src = "https://w.soundcloud.com/player/api.js";
+		script.onload = () => {
+			soundcloudApiLoaded = true;
+			for (const cb of soundcloudApiCallbacks.splice(0)) cb();
+		};
 		document.body.appendChild(script);
+	} else if (soundcloudApiLoaded || window.SC?.Widget) {
+		for (const cb of soundcloudApiCallbacks.splice(0)) cb();
 	}
-	script.addEventListener("load", callback, { once: true });
 }
 
 /**
@@ -348,46 +429,71 @@ function mountSoundcloud(facade: HTMLAnchorElement, autoPlay: boolean) {
 	iframe.allow = "autoplay; encrypted-media";
 	player.append(iframe);
 	facade.replaceWith(player);
-	if (autoPlay) pauseOthers();
+	const entryEl = (player.closest(".digest-entry") ??
+		facade.closest(".digest-entry") ??
+		player) as HTMLElement;
+	// biome-ignore lint/suspicious/noExplicitAny: SoundCloud widget instance
+	let scWidgetInstance: any = null;
+	let ready = false;
+	let playWhenReady = autoPlay;
+	const entry: MediaPlayer = {
+		type: "soundcloud",
+		entry: entryEl,
+		frame: iframe,
+		playing: autoPlay,
+		started: autoPlay,
+		progress: () =>
+			new Promise((resolve) =>
+				scWidgetInstance
+					? scWidgetInstance.getPosition((pos: number) =>
+							scWidgetInstance.getDuration((dur: number) =>
+								resolve({ position: pos / 1000, duration: dur / 1000 }),
+							),
+						)
+					: resolve({ position: 0, duration: 0 }),
+			),
+		seek: (seconds) => scWidgetInstance?.seekTo(seconds * 1000),
+		play: () => {
+			if (ready && scWidgetInstance) {
+				scWidgetInstance.play();
+			} else {
+				playWhenReady = true;
+				// もし ready が遅れている場合のフォールバック: iframe を auto_play=true でリロード
+				if (!iframe.src.includes("auto_play=true")) {
+					iframe.src = `https://w.soundcloud.com/player/?url=${track}&auto_play=true&visual=true&show_comments=false&show_reposts=false`;
+				}
+			}
+		},
+		pause: () => {
+			playWhenReady = false;
+			scWidgetInstance?.pause();
+		},
+		setVolume: (v) => scWidgetInstance?.setVolume(v),
+	};
+	media.players.push(entry);
+	if (autoPlay) {
+		pauseOthers(iframe);
+		notifyMediaState(entry);
+	}
+
 	withSoundcloudApi(() => {
 		const SC = window.SC;
 		if (!SC) return;
 		const widget = SC.Widget(iframe);
-		// 準備ができる前に再生を押されたら、準備ができたところで再生する（それまでの play は無視されるため）
-		let ready = false;
-		let playWhenReady = false;
-		const entry: MediaPlayer = {
-			frame: iframe,
-			playing: false,
-			started: false,
-			progress: () =>
-				new Promise((resolve) =>
-					widget.getPosition((pos) =>
-						widget.getDuration((dur) =>
-							resolve({ position: pos / 1000, duration: dur / 1000 }),
-						),
-					),
-				),
-			seek: (seconds) => widget.seekTo(seconds * 1000),
-			play: () => {
-				if (ready) widget.play();
-				else playWhenReady = true;
-			},
-			pause: () => {
-				playWhenReady = false;
-				widget.pause();
-			},
-			setVolume: (v) => widget.setVolume(v),
-		};
+		scWidgetInstance = widget;
+
 		const setPlaying = (playing: boolean) => {
 			entry.playing = playing;
 			if (playing) entry.started = true;
 			updatePlayButtons();
+			notifyMediaState(entry);
 		};
 		widget.bind(SC.Widget.Events.READY, () => {
 			ready = true;
 			widget.setVolume(mediaVolume());
-			if (playWhenReady) widget.play();
+			if (playWhenReady) {
+				widget.play();
+			}
 		});
 		widget.bind(SC.Widget.Events.PLAY, () => {
 			setPlaying(true);
@@ -395,7 +501,6 @@ function mountSoundcloud(facade: HTMLAnchorElement, autoPlay: boolean) {
 		});
 		widget.bind(SC.Widget.Events.PAUSE, () => setPlaying(false));
 		widget.bind(SC.Widget.Events.FINISH, () => setPlaying(false));
-		media.players.push(entry);
 	});
 }
 
@@ -407,24 +512,12 @@ export function setupSoundcloud() {
 	].filter((a) => !a.dataset.ready);
 	if (facades.length === 0) return;
 	withSoundcloudApi(() => {});
-	// プレーヤーの読み込みに時間がかかるので、押されてから読み込むのではなく、画面に近づいたら先に読み込んでおく
-	const observer = new IntersectionObserver(
-		(records) => {
-			for (const r of records) {
-				if (!r.isIntersecting) continue;
-				observer.unobserve(r.target);
-				mountSoundcloud(r.target as HTMLAnchorElement, false);
-			}
-		},
-		{ rootMargin: "600px 0px" },
-	);
 	for (const facade of facades) {
 		facade.dataset.ready = "true";
-		observer.observe(facade);
-		// 読み込む前に押されたときは、その場で差し替えて再生する
+		// クリックされたら他を停止して差し替えて再生する
 		facade.addEventListener("click", (e) => {
 			e.preventDefault();
-			observer.unobserve(facade);
+			pauseOthers();
 			mountSoundcloud(facade, true);
 		});
 	}

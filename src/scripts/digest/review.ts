@@ -1,5 +1,44 @@
 import { digestLists } from "./list";
 
+export type AdoptChangeListener = (entry: HTMLElement, adopt: boolean) => void;
+const adoptChangeListeners: AdoptChangeListener[] = [];
+
+export function onAdoptChange(listener: AdoptChangeListener): () => void {
+	adoptChangeListeners.push(listener);
+	return () => {
+		const index = adoptChangeListeners.indexOf(listener);
+		if (index !== -1) adoptChangeListeners.splice(index, 1);
+	};
+}
+
+export function notifyAdoptChange(entry: HTMLElement, adopt: boolean): void {
+	for (const cb of adoptChangeListeners) {
+		try {
+			cb(entry, adopt);
+		} catch {}
+	}
+}
+
+export function isReviewMode(): boolean {
+	return !!document.querySelector(".digest-review-banner");
+}
+
+const toggleAdoptHandlers = new Map<HTMLElement, () => Promise<boolean>>();
+const toggleAdoptByKey = new Map<string, () => Promise<boolean>>();
+
+/** 特定エントリの採用・不採用をトグルする（reviewモード時） */
+export async function toggleAdopt(
+	entry: HTMLElement,
+): Promise<boolean | undefined> {
+	const handler =
+		toggleAdoptHandlers.get(entry) ??
+		(entry.dataset.key ? toggleAdoptByKey.get(entry.dataset.key) : undefined);
+	if (handler) {
+		return await handler();
+	}
+	return undefined;
+}
+
 /**
  * プレビューの記事（先頭に .digest-review-banner がある）で、目次から採用・不採用の切り替えと並べ替えをする。
  * - 目次の ✅ / ⛔ を押すと採用・不採用が切り替わる
@@ -14,6 +53,8 @@ export async function setupDigestReview() {
 	const banner = document.querySelector<HTMLElement>(".digest-review-banner");
 	if (!banner || banner.dataset.ready) return;
 	banner.dataset.ready = "true";
+	toggleAdoptHandlers.clear();
+	toggleAdoptByKey.clear();
 	const date = banner.dataset.date ?? "";
 	// 記事を書き出したあとに切り替え・並べ替えた分もあるので、保存済みの状態を読み直す（読めなければ記事の中の値）
 	let saved: {
@@ -192,6 +233,7 @@ export async function setupDigestReview() {
 					adopt ? "採用（押すと不採用）" : "不採用（押すと採用）",
 				);
 				updateCount();
+				notifyAdoptChange(entry, adopt);
 			};
 			apply(
 				key in saved.adopt ? saved.adopt[key] : entry.dataset.adopt !== "false",
@@ -217,17 +259,27 @@ export async function setupDigestReview() {
 					}
 				}),
 			);
-			const onToggle = async (e: Event) => {
-				e.stopPropagation();
-				e.preventDefault();
+			const doToggle = async () => {
 				const adopt = entry.dataset.adopt === "false";
 				try {
 					await post("/__digest/adopt", { key, adopt });
 					apply(adopt);
 					status.textContent = `保存しました: ${entry.dataset.label ?? key} を${adopt ? "採用" : "不採用"}`;
+					return adopt;
 				} catch (err) {
 					fail("採用", err);
+					return !adopt;
 				}
+			};
+			toggleAdoptHandlers.set(entry, doToggle);
+			if (key) {
+				toggleAdoptByKey.set(key, doToggle);
+			}
+
+			const onToggle = async (e: Event) => {
+				e.stopPropagation();
+				e.preventDefault();
+				await doToggle();
 			};
 			badge.addEventListener("click", onToggle);
 			badge.addEventListener("keydown", (e) => {

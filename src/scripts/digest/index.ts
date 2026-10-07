@@ -3,6 +3,7 @@
  * 記事のあるページでだけ Layout.astro から読み込み、ページを表示するたびに renderDigest を呼ぶ
  */
 import { renderBluesky, renderTweets, setupPixiv } from "./embeds";
+import { setupFloatingPlayer } from "./floating-player";
 import { setupDigestLists } from "./list";
 import { media, setupSoundcloud, setupYoutube } from "./media";
 import { setupDigestReview } from "./review";
@@ -18,4 +19,5 @@ export function renderDigest() {
 	setupYoutube();
 	setupSoundcloud();
 	setupPixiv();
+	setupFloatingPlayer();
 }

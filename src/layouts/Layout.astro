@@ -296,7 +296,7 @@ function setClickOutsideToClose(panel: string, ignores: string[]) {
 				return;
 			}
 		}
-		panelDom!.classList.add("float-panel-closed");
+		panelDom?.classList.add("float-panel-closed");
 	});
 }
 setClickOutsideToClose("display-setting", ["display-setting", "display-settings-switch"])
@@ -607,13 +607,30 @@ if (window.swup) {
 <script>
 // デイリーダイジェストの記事の表示。記事の要素があるページでだけ読み込み、Swup のページ遷移のあとも描き直す
 const DIGEST_SELECTOR = ".digest-items, .digest-entry, .digest-review-banner, blockquote.twitter-tweet, blockquote.bluesky-embed"
+function clearOnloadAnimations() {
+	for (const el of document.querySelectorAll<HTMLElement>(".onload-animation")) {
+		el.style.transform = "none";
+		el.style.animation = "none";
+		el.style.opacity = "1";
+	}
+}
+document.addEventListener("animationend", (e) => {
+	if (e.target instanceof HTMLElement && e.target.classList.contains("onload-animation")) {
+		e.target.style.transform = "none";
+		e.target.style.animation = "none";
+		e.target.style.opacity = "1";
+	}
+});
 function renderDigest() {
 	if (!document.querySelector(DIGEST_SELECTOR)) return
 	import("../scripts/digest").then((m) => m.renderDigest())
 }
 
 renderDigest()
-const setupDigest = () => window.swup.hooks.on("page:view", renderDigest)
+const setupDigest = () => {
+	setTimeout(clearOnloadAnimations, 400);
+	renderDigest();
+}
 if (window.swup) {
 	setupDigest()
 } else {

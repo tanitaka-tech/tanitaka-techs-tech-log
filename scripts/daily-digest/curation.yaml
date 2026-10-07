@@ -996,3 +996,13 @@ rules:
     action: block
     reason: イラストセクションに動画を含めない
     added: 2026-10-01
+  - match:
+      author: bluesky:did:plc:wq2lrjhumgalwq2oekzofngz
+    action: block
+    reason: 風景写真で不採用が続いているため
+    added: 2026-10-08
+  - match:
+      author: misskey:9gocxzxd90
+    action: block
+    reason: Misskeyで不採用が続いているため
+    added: 2026-10-08
